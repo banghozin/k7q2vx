@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { placementsOf } from "@/data/themes";
 import {
@@ -203,6 +203,49 @@ export function NotesView() {
 
 /* ------------------------------------------------------------------ */
 
+/**
+ * 진입한 날 그 종목에 무슨 기사가 있었는지.
+ *
+ * "내가 이 날 왜 샀지"에 답하는 부분입니다. 기억은 나중에 바뀌지만 기사는
+ * 안 바뀝니다. 보관해 둔 기사에서 찾아오므로, 아카이브가 시작된 뒤의
+ * 매매에만 나옵니다.
+ */
+function EntryDayNews({ ticker, day }: { ticker: string; day: string }) {
+  const [items, setItems] = useState<
+    { title: string; link: string; date: string }[] | null
+  >(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(
+      `/api/news?ticker=${encodeURIComponent(ticker)}&day=${encodeURIComponent(day)}`,
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => alive && setItems(j?.items ?? []))
+      .catch(() => alive && setItems([]));
+    return () => {
+      alive = false;
+    };
+  }, [ticker, day]);
+
+  if (!items || items.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: ".65rem" }}>
+      <span className="layernews__label">진입한 날 이 종목이 나온 기사</span>
+      <ul className="arcnews">
+        {items.map((n) => (
+          <li key={n.link}>
+            <a href={n.link} target="_blank" rel="noreferrer">
+              <span className="arcnews__title">{n.title}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function TradeCard({ trade }: { trade: Trade }) {
   const settings = useNotes((s) => s.settings);
   const closeTrade = useNotes((s) => s.close);
@@ -340,6 +383,8 @@ function TradeCard({ trade }: { trade: Trade }) {
           {trade.memo}
         </p>
       )}
+
+      <EntryDayNews ticker={trade.ticker} day={trade.entryDate} />
 
       {trade.status === "closed" && (
         <div

@@ -1075,6 +1075,76 @@ tbody tr:hover {
   overflow: hidden;
 }
 
+/* ── 보관된 기사 목록 ─────────────────────────────────────────────── */
+
+.arcnews {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.arcnews li {
+  border-top: 1px solid var(--rule-soft);
+}
+
+.arcnews li:first-child {
+  border-top: none;
+}
+
+.arcnews a {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.45rem 0;
+  text-decoration: none;
+  color: var(--ink-2);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.arcnews a:hover .arcnews__title {
+  color: var(--brass);
+}
+
+.arcnews__day {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  color: var(--ink-4);
+}
+
+.arcnews__title {
+  transition: color 0.15s;
+}
+
+.arcnews__src {
+  font-size: 0.68rem;
+  color: var(--ink-4);
+  margin: 0.5rem 0 0;
+}
+
+.arcnews__empty {
+  font-size: 0.8rem;
+  color: var(--ink-4);
+  margin: 0.4rem 0 0;
+}
+
+/* 층 안에 끼워 넣는 기사 — 종목 카드 아래 */
+.layernews {
+  margin-top: 0.9rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--rule-soft);
+  max-width: var(--measure);
+}
+
+.layernews__label {
+  display: block;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  color: var(--ink-4);
+}
+
 /* ── 안내 / 면책 ─────────────────────────────────────────────────── */
 
 .notice {

@@ -53,6 +53,13 @@ jobs:
       - name: 지표 계산
         run: npm run compute
 
+      # 뉴스 피드는 최근 100건만 주는데 그게 7시간 반이면 다 찹니다.
+      # 오늘 안 모으면 오늘 기사는 영영 사라지므로 매일 쌓아 둡니다.
+      # 실패해도 시세 갱신 전체를 멈추지는 않습니다.
+      - name: 뉴스 보관
+        run: npm run news
+        continue-on-error: true
+
       - name: 바뀐 것만 커밋
         run: |
           git config user.name "github-actions[bot]"

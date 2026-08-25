@@ -6,6 +6,8 @@ import {
   pct,
   tone,
 } from "@/lib/market-data";
+import { newsForTickers } from "@/lib/news-archive";
+import { ArchivedNews } from "./archived-news";
 import { Specimen } from "./specimen";
 
 /**
@@ -29,6 +31,11 @@ export function Strata({
     <div className="strata">
       {layers.map((layer) => {
         const heat = getLayerHeatOne(themeSlug, layer.n);
+        // 이 층 종목들이 나온 기사 — 층이 왜 움직였는지 실마리
+        const layerNews = newsForTickers(
+          layer.stocks.map((s) => s.ticker),
+          3,
+        );
         return (
           <section
             key={layer.key}
@@ -97,6 +104,13 @@ export function Strata({
                   />
                 ))}
               </div>
+
+              {layerNews.length > 0 && (
+                <div className="layernews">
+                  <span className="layernews__label">이 층 종목이 나온 기사</span>
+                  <ArchivedNews items={layerNews} showSource={false} />
+                </div>
+              )}
             </div>
           </section>
         );

@@ -20,10 +20,18 @@ export type Candle = {
   volume: number;
 };
 
-/** 내가 산 자리 · 판 자리 표시 */
+/**
+ * 차트 위에 찍는 표시.
+ *   entry/exit — 매매노트에 적어 둔 내가 산 자리·판 자리
+ *   news       — 그 종목 기사가 나온 날
+ *
+ * 뉴스 표시가 있으면 "이 급등이 그 뉴스였구나"가 눈으로 보입니다. 다만
+ * **기사가 그 움직임을 일으켰다는 뜻은 아닙니다** — 같은 날이었다는 사실만
+ * 표시합니다. 화면 설명에도 그렇게 적어 둡니다.
+ */
 export type TradeMarker = {
   time: number; // unix seconds (해당 날짜 0시)
-  kind: "entry" | "exit";
+  kind: "entry" | "exit" | "news";
   text: string;
 };
 
@@ -120,19 +128,30 @@ export function CandleChart({
           price,
           [...markers]
             .sort((a, b) => a.time - b.time)
-            .map((m) => ({
-              time: m.time as Time,
-              position:
-                m.kind === "entry"
-                  ? ("belowBar" as const)
-                  : ("aboveBar" as const),
-              color: m.kind === "entry" ? "#c8a15a" : "#7d8590",
-              shape:
-                m.kind === "entry"
-                  ? ("arrowUp" as const)
-                  : ("arrowDown" as const),
-              text: m.text,
-            })),
+            .map((m) => {
+              if (m.kind === "news") {
+                return {
+                  time: m.time as Time,
+                  position: "aboveBar" as const,
+                  color: "#c8a15a",
+                  shape: "circle" as const,
+                  text: m.text,
+                };
+              }
+              return {
+                time: m.time as Time,
+                position:
+                  m.kind === "entry"
+                    ? ("belowBar" as const)
+                    : ("aboveBar" as const),
+                color: m.kind === "entry" ? "#c8a15a" : "#7d8590",
+                shape:
+                  m.kind === "entry"
+                    ? ("arrowUp" as const)
+                    : ("arrowDown" as const),
+                text: m.text,
+              };
+            }),
         );
       } catch {
         // 마커는 부가 기능입니다. 실패해도 차트는 그대로 보입니다.

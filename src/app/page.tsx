@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { THEMES, getTheme, multiThemeStocks } from "@/data/themes";
 import { CrossTicker } from "@/components/cross-ticker";
+import { NewsList } from "@/components/news-list";
+import { fetchNews } from "@/lib/sbhnews";
 import { ThemeBriefingLine } from "@/components/briefing";
 import {
   asOf,
@@ -12,7 +14,10 @@ import {
   tone,
 } from "@/lib/market-data";
 
-export default function Home() {
+// 뉴스는 실행 중에 읽어오므로 6시간마다 새로 만듭니다
+export const revalidate = 21600;
+
+export default async function Home() {
   const totalStocks = THEMES.reduce(
     (a, t) => a + t.layers.reduce((x, l) => x + l.stocks.length, 0),
     0,
@@ -23,6 +28,11 @@ export default function Home() {
   const cold = coldestLayers(3);
   const moves = handovers();
   const rotated = rotations().slice(0, 4);
+
+  // 홈은 "지금"을 보여주는 자리라 보관본이 아니라 실시간 피드를 씁니다
+  const headlines = (await fetchNews())
+    .filter((n) => n.category === "economy")
+    .slice(0, 5);
 
   return (
     <>
@@ -50,6 +60,19 @@ export default function Home() {
           </div>
         </section>
       </div>
+
+      {headlines.length > 0 && (
+        <div className="wrap">
+          <section className="section">
+            <h2 className="section__title">오늘의 경제 헤드라인</h2>
+            <p className="section__sub">
+              공개 뉴스 피드의 경제 기사입니다. 위 테마·종목 배치와 인과관계를
+              주장하지 않습니다.
+            </p>
+            <NewsList items={headlines} />
+          </section>
+        </div>
+      )}
 
       {rotated.length > 0 && (
         <div className="wrap">

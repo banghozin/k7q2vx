@@ -14,6 +14,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 
 const DIR = "src/data/generated";
+const NEWS_DIR = `${DIR}/news`;
 
 const EMPTY: Record<string, unknown> = {
   "stocks.json": { generatedAt: "", asOf: "", source: "", stocks: {} },
@@ -33,6 +34,18 @@ for (const [name, shape] of Object.entries(EMPTY)) {
   writeFileSync(path, JSON.stringify(shape) + "\n", "utf8");
   made++;
   console.log(`[ensure] ${name} 이 없어 빈 파일을 만들었습니다`);
+}
+
+// 뉴스 아카이브도 같은 이유로 빈 파일이 있어야 합니다
+mkdirSync(NEWS_DIR, { recursive: true });
+if (!existsSync(`${NEWS_DIR}/recent.json`)) {
+  writeFileSync(
+    `${NEWS_DIR}/recent.json`,
+    JSON.stringify({ updatedAt: "", days: 90, count: 0, items: [] }) + "\n",
+    "utf8",
+  );
+  made++;
+  console.log(`[ensure] news/recent.json 이 없어 빈 파일을 만들었습니다`);
 }
 
 if (made > 0) {

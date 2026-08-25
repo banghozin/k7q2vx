@@ -12,7 +12,9 @@
     "validate": "tsx scripts/validate-tickers.ts",
     "fetch": "tsx scripts/fetch-prices.ts",
     "compute": "tsx scripts/compute.ts",
-    "update": "npm run fetch && npm run compute"
+    "news": "tsx scripts/fetch-news.ts",
+    "test:news": "tsx scripts/test-news-match.ts",
+    "update": "npm run fetch && npm run compute && npm run news"
   },
   "dependencies": {
     "lightweight-charts": "5.2.1",

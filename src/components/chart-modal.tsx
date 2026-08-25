@@ -22,6 +22,17 @@ type Payload = {
   exchange: string | null;
 };
 
+type NewsPayload = {
+  items: { title: string; link: string; date: string; day: string }[];
+  days: { day: string; time: number; titles: string[] }[];
+};
+
+const newsDate = new Intl.DateTimeFormat("ko-KR", {
+  month: "2-digit",
+  day: "2-digit",
+  timeZone: "UTC",
+});
+
 export function ChartModal() {
   const ticker = useChartModal((s) => s.ticker);
   const name = useChartModal((s) => s.name);
@@ -31,6 +42,7 @@ export function ChartModal() {
 
   const [range, setRange] = useState<(typeof RANGES)[number]["key"]>("1y");
   const [data, setData] = useState<Payload | null>(null);
+  const [news, setNews] = useState<NewsPayload | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "error">("idle");
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
@@ -70,6 +82,22 @@ export function ChartModal() {
     };
   }, [ticker, range]);
 
+  // 보관해 둔 기사는 구간과 무관하므로 종목이 바뀔 때만 받아옵니다
+  useEffect(() => {
+    if (!ticker) return;
+    let alive = true;
+    setNews(null);
+    fetch(`/api/news?ticker=${encodeURIComponent(ticker)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: NewsPayload | null) => alive && setNews(j))
+      .catch(() => {
+        /* 기사는 부가 정보입니다. 없어도 차트는 그대로 보입니다. */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [ticker]);
+
   // Esc로 닫기 + 배경 스크롤 잠금 + 초점 이동과 복귀
   useEffect(() => {
     if (!ticker) return;
@@ -87,7 +115,7 @@ export function ChartModal() {
     };
   }, [ticker, close]);
 
-  // 내가 산 자리 · 판 자리
+  // 내가 산 자리 · 판 자리 · 기사가 나온 날
   const markers = useMemo<TradeMarker[]>(() => {
     if (!ticker) return [];
     const out: TradeMarker[] = [];
@@ -104,8 +132,15 @@ export function ChartModal() {
         }
       }
     }
+    for (const d of news?.days ?? []) {
+      out.push({
+        time: d.time,
+        kind: "news",
+        text: d.titles.length > 1 ? `기사 ${d.titles.length}` : "기사",
+      });
+    }
     return out;
-  }, [ticker, trades]);
+  }, [ticker, trades, news]);
 
   const places = ticker ? placementsOf(ticker) : [];
 
@@ -198,8 +233,48 @@ export function ChartModal() {
 
           {markers.length > 0 && (
             <p style={{ fontSize: ".76rem", color: "var(--ink-4)", margin: ".5rem 0 0" }}>
-              차트의 화살표는 매매노트에 적어 둔 진입·청산 날짜입니다.
+              화살표는 매매노트에 적어 둔 진입·청산 날짜, 동그라미는 이 종목
+              기사가 나온 날입니다. <strong>기사가 그 움직임을 일으켰다는 뜻은
+              아니고,</strong> 같은 날이었다는 사실만 표시합니다.
             </p>
+          )}
+
+          {news && news.items.length > 0 && (
+            <div style={{ marginTop: "1.5rem" }}>
+              <h4
+                style={{
+                  fontSize: ".64rem",
+                  letterSpacing: ".14em",
+                  textTransform: "uppercase",
+                  color: "var(--ink-3)",
+                  marginBottom: ".6rem",
+                }}
+              >
+                이 종목이 나온 기사
+              </h4>
+              <ul className="arcnews">
+                {news.items.map((n) => (
+                  <li key={n.link}>
+                    <a href={n.link} target="_blank" rel="noreferrer">
+                      <span className="arcnews__day mono">
+                        {newsDate.format(new Date(n.date))}
+                      </span>
+                      <span className="arcnews__title">{n.title}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+              <p className="arcnews__src">
+                출처 SBHNews / 센서스튜디오 ·{" "}
+                <a
+                  href="https://creativecommons.org/licenses/by/4.0/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  CC BY 4.0
+                </a>
+              </p>
+            </div>
           )}
 
           <div style={{ marginTop: "1.5rem" }}>
