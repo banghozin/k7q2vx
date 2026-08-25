@@ -1,0 +1,1192 @@
+/* ==========================================================================
+   테마 지도 — 디자인 시스템
+   컨셉: 지층 단면도(地層斷面圖). 시추 코어를 세로로 세워 놓은 도면.
+   Tailwind를 쓰지 않고 CSS 변수 + 의미 있는 클래스명으로 직접 씁니다.
+   ========================================================================== */
+
+:root {
+  /* 바탕 — 젖은 슬레이트 */
+  --ground: #0a0c0f;
+  --ground-2: #0e1116;
+  --panel: #12161c;
+  --panel-2: #171c24;
+
+  /* 선 */
+  --rule: #232932;
+  --rule-soft: #1a1f27;
+  --rule-strong: #333b47;
+
+  /* 글자 — 오래된 도면 종이 */
+  --ink: #e9e5dd;
+  --ink-2: #b3ada2;
+  --ink-3: #7d8590;
+  --ink-4: #545c67;
+
+  /* 구조 강조 — 황동 */
+  --brass: #c8a15a;
+  --brass-dim: rgba(200, 161, 90, 0.24);
+  --brass-ghost: rgba(200, 161, 90, 0.08);
+
+  /* 등락 — 한국 증시 관행(빨강=상승, 파랑=하락) */
+  --up: #ff5445;
+  --down: #4a90ff;
+
+  /* 테마별 강조색은 각 페이지에서 --accent 를 덮어씁니다 */
+  --accent: var(--brass);
+
+  --shadow-lift: 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 12px 32px -18px rgba(0, 0, 0, 0.9);
+
+  --stratum-gutter: 5.5rem;
+  --measure: 74ch;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  /* 스크롤바·기본 폼 요소까지 어두운 테마로 그려지게 합니다 */
+  color-scheme: dark;
+  scroll-behavior: smooth;
+  /* 딥링크로 층에 뛰어들 때 헤더에 가리지 않도록 */
+  scroll-padding-top: 6.5rem;
+  /* 모바일에서 두 번 탭 확대 지연 제거. 확대 자체는 막지 않습니다. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(200, 161, 90, 0.18);
+}
+
+/* 본문 바로가기 — 키보드로 탭할 때만 나타납니다 */
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 0.6rem 1rem;
+  background: var(--brass);
+  color: #16130c;
+  font-weight: 600;
+  border-radius: 0 0 3px 0;
+}
+
+.skip:focus {
+  left: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-sans), "Apple SD Gothic Neo", sans-serif;
+  font-size: 15px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.01em;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-serif), "Apple SD Gothic Neo", serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  margin: 0;
+  text-wrap: balance;
+}
+
+a {
+  color: inherit;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* 숫자·티커는 전부 모노. 도면 느낌의 핵심입니다. */
+.mono {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/* ── 레이아웃 ─────────────────────────────────────────────────────── */
+
+.shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.wrap {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 clamp(1rem, 4vw, 2.5rem);
+}
+
+/* ── 상단 ─────────────────────────────────────────────────────────── */
+
+.masthead {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--ground);
+  border-bottom: 1px solid var(--rule);
+}
+
+.masthead__bar {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  height: 3.5rem;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.brand__mark {
+  font-family: var(--font-sans), "Apple SD Gothic Neo", sans-serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  color: var(--brass);
+  border: 1px solid var(--brass-dim);
+  padding: 0.15rem 0.4rem;
+  border-radius: 2px;
+}
+
+.brand__name {
+  font-family: var(--font-serif), serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.masthead__nav {
+  margin-left: auto;
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.navlink {
+  padding: 0.35rem 0.7rem;
+  border-radius: 3px;
+  font-size: 0.85rem;
+  color: var(--ink-3);
+  text-decoration: none;
+  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+
+.navlink:hover {
+  color: var(--ink);
+  background: var(--panel);
+}
+
+.navlink[aria-current="page"] {
+  color: var(--ink);
+  background: var(--panel-2);
+}
+
+/* 테마 레일 — 가로 스크롤 */
+.rail {
+  border-bottom: 1px solid var(--rule);
+  background: var(--ground-2);
+}
+
+.rail__track {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.rail__track::-webkit-scrollbar {
+  display: none;
+}
+
+.rail__item {
+  flex-shrink: 0;
+  padding: 0.6rem 0.95rem;
+  font-size: 0.82rem;
+  color: var(--ink-3);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  border-right: 1px solid var(--rule-soft);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+
+.rail__item:hover {
+  color: var(--ink);
+  background: var(--panel);
+}
+
+.rail__item[aria-current="page"] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+  background: var(--panel);
+}
+
+/* ── 문서 머리 ───────────────────────────────────────────────────── */
+
+.dochead {
+  padding: clamp(2rem, 6vw, 3.75rem) 0 1.75rem;
+  border-bottom: 1px solid var(--rule);
+  position: relative;
+}
+
+.eyebrow {
+  font-family: var(--font-sans), "Apple SD Gothic Neo", sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.85rem;
+}
+
+.dochead__title {
+  font-size: clamp(1.9rem, 5.5vw, 3rem);
+  margin-bottom: 0.6rem;
+}
+
+.dochead__tagline {
+  color: var(--ink-2);
+  font-size: 1rem;
+  max-width: var(--measure);
+}
+
+.dochead__question {
+  margin-top: 1.5rem;
+  padding-left: 1rem;
+  border-left: 2px solid var(--accent);
+  font-family: var(--font-serif), serif;
+  font-size: 1.05rem;
+  color: var(--ink);
+  max-width: var(--measure);
+}
+
+.docmeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
+  margin-top: 1.5rem;
+  font-family: var(--font-sans), "Apple SD Gothic Neo", sans-serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  color: var(--ink-4);
+}
+
+/* ── 지층 ─────────────────────────────────────────────────────────── */
+
+.strata {
+  position: relative;
+  padding: 0 0 4rem;
+}
+
+/* 왼쪽을 관통하는 시추 코어 선 */
+.strata::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--stratum-gutter) / 2);
+  top: 0;
+  bottom: 4rem;
+  width: 1px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--rule-strong) 3rem,
+    var(--rule-strong) calc(100% - 3rem),
+    transparent
+  );
+}
+
+.stratum {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--stratum-gutter) 1fr;
+  border-bottom: 1px solid var(--rule);
+  padding: 2.25rem 0;
+  scroll-margin-top: 7rem;
+}
+
+.stratum:last-child {
+  border-bottom: none;
+}
+
+.stratum:target .stratum__index,
+.stratum.is-focused .stratum__index {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--ground);
+}
+
+.stratum__gutter {
+  position: relative;
+}
+
+.stratum__index {
+  position: sticky;
+  top: 6rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono), monospace;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ink-3);
+  background: var(--ground);
+  border: 1px solid var(--rule-strong);
+  border-radius: 50%;
+  transition: color 0.2s, border-color 0.2s;
+  margin-left: calc(var(--stratum-gutter) / 2 - 1.375rem);
+}
+
+.stratum__index sub {
+  font-size: 0.55rem;
+  letter-spacing: 0.08em;
+  color: var(--ink-4);
+  display: block;
+  margin-top: -0.15rem;
+}
+
+.stratum__head {
+  margin-bottom: 1.1rem;
+}
+
+.stratum__name {
+  font-size: clamp(1.15rem, 3vw, 1.45rem);
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.stratum__count {
+  font-family: var(--font-sans), "Apple SD Gothic Neo", sans-serif;
+  font-size: 0.7rem;
+  color: var(--ink-4);
+  letter-spacing: 0.08em;
+}
+
+.stratum__role {
+  color: var(--ink-2);
+  font-size: 0.92rem;
+  margin-top: 0.4rem;
+  max-width: var(--measure);
+}
+
+/* 주의 문구 — 테두리를 왼쪽만 긋는 흔한 콜아웃 대신, 상하 헤어라인 */
+.caution {
+  margin: 0.9rem 0 0;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--brass-dim);
+  border-bottom: 1px solid var(--brass-dim);
+  background: var(--brass-ghost);
+  font-size: 0.85rem;
+  color: var(--ink-2);
+  max-width: var(--measure);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.7rem;
+  align-items: start;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+.caution__label {
+  font-family: var(--font-sans), "Apple SD Gothic Neo", sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  color: var(--brass);
+  text-transform: uppercase;
+  padding-top: 0.22rem;
+  white-space: nowrap;
+}
+
+/* ── 종목 카드 (시료) ─────────────────────────────────────────────── */
+
+.specimens {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  gap: 1px;
+  background: var(--rule-soft);
+  border: 1px solid var(--rule-soft);
+}
+
+.specimen {
+  position: relative;
+  background: var(--panel);
+  padding: 0.95rem 1rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  text-align: left;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+  min-height: 100%;
+}
+
+.specimen:hover {
+  background: var(--panel-2);
+}
+
+.specimen.is-anchor::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: var(--accent);
+}
+
+.specimen__top {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.specimen__ticker {
+  font-family: var(--font-mono), monospace;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.specimen__name {
+  font-size: 0.78rem;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.specimen__why {
+  font-size: 0.83rem;
+  line-height: 1.65;
+  color: var(--ink-2);
+}
+
+.specimen__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: auto;
+  padding-top: 0.3rem;
+}
+
+.tag {
+  font-family: var(--font-sans), "Apple SD Gothic Neo", sans-serif;
+  font-size: 0.63rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  padding: 0.1rem 0.34rem;
+  text-decoration: none;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.tag:hover {
+  color: var(--ink);
+  border-color: var(--ink-3);
+}
+
+.tag--anchor {
+  color: var(--accent);
+  border-color: var(--brass-dim);
+}
+
+/* 별표 */
+.star {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  color: var(--ink-4);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  z-index: 2;
+}
+
+.star:hover {
+  color: var(--brass);
+  background: var(--ground);
+}
+
+.star[data-on="true"] {
+  color: var(--brass);
+}
+
+/* ── 등락 색 ─────────────────────────────────────────────────────── */
+
+.up {
+  color: var(--up);
+}
+.down {
+  color: var(--down);
+}
+
+/* ── 홈 ───────────────────────────────────────────────────────────── */
+
+.hero {
+  padding: clamp(3rem, 10vw, 6rem) 0 clamp(2rem, 6vw, 3.5rem);
+  border-bottom: 1px solid var(--rule);
+}
+
+.hero__title {
+  font-size: clamp(2.1rem, 7vw, 4rem);
+  max-width: 18ch;
+  margin-bottom: 1.25rem;
+}
+
+.hero__lede {
+  color: var(--ink-2);
+  font-size: 1.02rem;
+  max-width: 56ch;
+}
+
+.hero__lede + .hero__lede {
+  margin-top: 0.85rem;
+}
+
+.themegrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1px;
+  background: var(--rule-soft);
+  border: 1px solid var(--rule-soft);
+  margin: 2.5rem 0;
+}
+
+.themecard {
+  background: var(--panel);
+  padding: 1.35rem 1.25rem 1.15rem;
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: background 0.15s;
+  position: relative;
+  overflow: hidden;
+}
+
+.themecard::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s ease;
+}
+
+.themecard:hover {
+  background: var(--panel-2);
+}
+
+.themecard:hover::after {
+  transform: scaleX(1);
+}
+
+.themecard__n {
+  font-family: var(--font-sans), "Apple SD Gothic Neo", sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  color: var(--ink-4);
+}
+
+.themecard__name {
+  font-family: var(--font-serif), serif;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.themecard__tagline {
+  font-size: 0.83rem;
+  color: var(--ink-3);
+}
+
+/* 미니 층 막대 — 카드 안에 층 개수를 눈금으로 */
+.ticks {
+  display: flex;
+  gap: 2px;
+  margin-top: 0.65rem;
+}
+
+.ticks i {
+  height: 3px;
+  flex: 1;
+  background: var(--rule-strong);
+  border-radius: 1px;
+}
+
+.ticks i:first-child {
+  background: var(--accent);
+}
+
+/* ── 섹션 ─────────────────────────────────────────────────────────── */
+
+.section {
+  padding: clamp(2.25rem, 6vw, 3.5rem) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.section__title {
+  font-size: 1.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.section__sub {
+  color: var(--ink-3);
+  font-size: 0.9rem;
+  max-width: var(--measure);
+  margin-bottom: 1.5rem;
+}
+
+/* ── 모달 ─────────────────────────────────────────────────────────── */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(4, 5, 7, 0.86);
+  display: grid;
+  place-items: end center;
+  animation: fade 0.18s ease;
+  overscroll-behavior: contain;
+}
+
+@media (min-width: 720px) {
+  .scrim {
+    place-items: center;
+    padding: 2rem;
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.sheet {
+  width: 100%;
+  max-width: 860px;
+  max-height: 92vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--ground-2);
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px 4px 0 0;
+  box-shadow: var(--shadow-lift);
+  animation: rise 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* 노치 있는 기기에서 아래가 잘리지 않도록 */
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+@media (min-width: 720px) {
+  .sheet {
+    border-radius: 4px;
+  }
+}
+
+@keyframes rise {
+  from {
+    transform: translateY(14px);
+    opacity: 0;
+  }
+}
+
+.sheet__head {
+  position: sticky;
+  top: 0;
+  background: var(--ground-2);
+  border-bottom: 1px solid var(--rule);
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  z-index: 2;
+}
+
+.sheet__body {
+  padding: 1.25rem;
+}
+
+.iconbtn {
+  margin-left: auto;
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  color: var(--ink-3);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.iconbtn:hover {
+  color: var(--ink);
+  border-color: var(--ink-3);
+}
+
+/* 범위 선택 */
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.segmented button {
+  background: none;
+  border: none;
+  padding: 0.3rem 0.6rem;
+  font-family: var(--font-sans), "Apple SD Gothic Neo", sans-serif;
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  cursor: pointer;
+  border-right: 1px solid var(--rule-soft);
+}
+
+.segmented button:last-child {
+  border-right: none;
+}
+
+.segmented button[aria-pressed="true"] {
+  background: var(--panel-2);
+  color: var(--ink);
+}
+
+/* ── 폼 ───────────────────────────────────────────────────────────── */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.field > label {
+  font-family: var(--font-sans), "Apple SD Gothic Neo", sans-serif;
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.field .hint {
+  font-size: 0.72rem;
+  color: var(--ink-4);
+}
+
+input[type="text"],
+input[type="number"],
+input[type="date"],
+textarea,
+select {
+  background: var(--ground);
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  padding: 0.5rem 0.65rem;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  width: 100%;
+}
+
+input[type="number"],
+input[type="date"] {
+  font-family: var(--font-mono), monospace;
+}
+
+textarea {
+  min-height: 5.5rem;
+  resize: vertical;
+  line-height: 1.65;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  border-color: var(--brass);
+  outline: 2px solid var(--brass);
+  outline-offset: 1px;
+}
+
+/* 마우스로 눌렀을 때도 어디에 커서가 있는지는 보여야 합니다 */
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--brass);
+}
+
+/* 윈도우 다크모드에서 네이티브 select 가 흰 배경으로 뜨는 것을 막습니다 */
+select {
+  background-color: var(--ground);
+  color: var(--ink);
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.85rem;
+}
+
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.85rem;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  text-decoration: none;
+}
+
+.btn:hover {
+  background: var(--panel-2);
+  border-color: var(--ink-4);
+}
+
+.btn--primary {
+  background: var(--brass);
+  border-color: var(--brass);
+  color: #16130c;
+  font-weight: 600;
+}
+
+.btn--primary:hover {
+  background: #d7b06a;
+  border-color: #d7b06a;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn--ghost {
+  background: none;
+}
+
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  color: var(--ink-3);
+  cursor: pointer;
+  user-select: none;
+}
+
+.check input {
+  width: auto;
+  margin: 0;
+  accent-color: var(--brass);
+}
+
+.check:has(input:checked) {
+  color: var(--ink);
+  border-color: var(--brass-dim);
+  background: var(--brass-ghost);
+}
+
+/* ── 계기판(R 배수 등) ────────────────────────────────────────────── */
+
+.readouts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1px;
+  background: var(--rule-soft);
+  border: 1px solid var(--rule-soft);
+  margin: 1rem 0;
+}
+
+.readout {
+  background: var(--panel);
+  padding: 0.75rem 0.85rem;
+}
+
+.readout__label {
+  font-family: var(--font-sans), "Apple SD Gothic Neo", sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+.readout__value {
+  font-family: var(--font-mono), monospace;
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 0.15rem;
+  line-height: 1.2;
+}
+
+.readout__note {
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  margin-top: 0.1rem;
+}
+
+/* ── 표 ───────────────────────────────────────────────────────────── */
+
+.tablewrap {
+  overflow-x: auto;
+  border: 1px solid var(--rule);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  min-width: 640px;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--rule-soft);
+  vertical-align: top;
+}
+
+th {
+  font-family: var(--font-sans), "Apple SD Gothic Neo", sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  background: var(--ground-2);
+  white-space: nowrap;
+}
+
+tbody tr:hover {
+  background: var(--panel);
+}
+
+/* ── 뉴스 ─────────────────────────────────────────────────────────── */
+
+.newslist {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--rule-soft);
+}
+
+.newsitem {
+  display: block;
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+  text-decoration: none;
+  transition: background 0.15s;
+}
+
+.newsitem:hover .newsitem__title {
+  color: var(--brass);
+}
+
+.newsitem__meta {
+  font-family: var(--font-sans), "Apple SD Gothic Neo", sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  color: var(--ink-4);
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.newsitem__title {
+  font-size: 0.92rem;
+  color: var(--ink);
+  transition: color 0.15s;
+}
+
+.newsitem__desc {
+  font-size: 0.8rem;
+  color: var(--ink-3);
+  margin-top: 0.25rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── 안내 / 면책 ─────────────────────────────────────────────────── */
+
+.notice {
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  padding: 1rem 0;
+  font-size: 0.83rem;
+  color: var(--ink-2);
+  max-width: var(--measure);
+}
+
+.notice strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.empty {
+  padding: 3rem 1rem;
+  text-align: center;
+  color: var(--ink-3);
+  font-size: 0.9rem;
+  border: 1px dashed var(--rule-strong);
+}
+
+/* ── 바닥 ─────────────────────────────────────────────────────────── */
+
+.foot {
+  margin-top: auto;
+  border-top: 1px solid var(--rule);
+  padding: 2.25rem 0 3rem;
+  font-size: 0.8rem;
+  color: var(--ink-4);
+}
+
+.foot__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 1.75rem;
+}
+
+.foot h4 {
+  font-family: var(--font-sans), "Apple SD Gothic Neo", sans-serif;
+  font-size: 0.63rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 0.5rem;
+}
+
+.foot a {
+  color: var(--ink-3);
+  text-decoration: none;
+}
+
+.foot a:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.foot ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* ── 반응형 ───────────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  :root {
+    --stratum-gutter: 3.25rem;
+  }
+
+  .stratum__index {
+    width: 2.1rem;
+    height: 2.1rem;
+    font-size: 0.82rem;
+    margin-left: calc(var(--stratum-gutter) / 2 - 1.05rem);
+    top: 5rem;
+  }
+
+  .stratum__index sub {
+    display: none;
+  }
+
+  .specimens {
+    grid-template-columns: 1fr;
+  }
+
+  .masthead__nav {
+    gap: 0;
+  }
+
+  .navlink {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.8rem;
+  }
+}
+
+/* 인쇄 시 도면처럼 */
+@media print {
+  .masthead,
+  .rail,
+  .star,
+  .foot {
+    display: none;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+}

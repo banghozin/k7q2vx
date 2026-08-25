@@ -1,0 +1,11 @@
+# 개발은 윈도우, GitHub Actions 는 리눅스에서 돕니다.
+# 줄바꿈을 저장소 안에서 LF 로 통일해 두 환경의 차이가 diff 로 새지 않게 합니다.
+* text=auto eol=lf
+
+# 셸 스크립트는 반드시 LF (CRLF 면 리눅스에서 실행 자체가 깨집니다)
+*.sh text eol=lf
+
+# 이진 파일은 건드리지 않습니다
+*.png binary
+*.ico binary
+*.woff2 binary
