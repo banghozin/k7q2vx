@@ -10,7 +10,8 @@ const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
 
 const OK_INTERVAL = new Set(["1d", "1wk"]);
-const OK_RANGE = new Set(["1mo", "3mo", "6mo", "1y", "2y", "5y"]);
+// 훈련 화면은 과거로 거슬러 올라가야 해서 긴 구간이 필요합니다
+const OK_RANGE = new Set(["1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "max"]);
 
 type YahooChart = {
   chart: {

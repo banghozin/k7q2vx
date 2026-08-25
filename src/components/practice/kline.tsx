@@ -1,0 +1,205 @@
+"use client";
+
+import { useEffect, useImperativeHandle, useRef } from "react";
+import type { Chart, KLineData } from "klinecharts";
+
+/**
+ * KLineChart 을 감싼 조각.
+ *
+ * 이 라이브러리는 불러오는 순간 `window` 를 건드립니다. Next 는 화면을 서버에서
+ * 미리 만들어 두는데 서버에는 `window` 가 없어서, 그냥 import 하면 빌드가
+ * 깨집니다. 그래서 **브라우저에서 화면이 뜬 뒤에** 동적으로 불러옵니다.
+ * (실제로 그 오류를 먼저 만나고 이렇게 고쳤습니다.)
+ */
+
+export type KlineHandle = {
+  /** 봉 데이터를 통째로 갈아끼웁니다 */
+  setData: (bars: KLineData[]) => void;
+  /** 그리기 도구를 켭니다 */
+  startDraw: (name: string) => void;
+  /** 그린 것을 모두 지웁니다 */
+  clearDrawings: () => void;
+  /** 마지막에 그린 것 하나를 지웁니다 */
+  undo: () => void;
+  /** 보조지표를 켜고 끕니다 */
+  toggleIndicator: (name: string, onCandle: boolean) => boolean;
+  /** 오른쪽 끝으로 붙입니다 */
+  scrollToEnd: () => void;
+};
+
+export function Kline({
+  ref,
+  onReady,
+}: {
+  ref: React.Ref<KlineHandle>;
+  onReady?: () => void;
+}) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<Chart | null>(null);
+  const drawnRef = useRef<string[]>([]);
+  const indicatorsRef = useRef<Map<string, string>>(new Map());
+  const cleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    let disposed = false;
+    let api: typeof import("klinecharts") | null = null;
+
+    (async () => {
+      // 브라우저에서만 불러옵니다 — 위 주석 참고
+      api = await import("klinecharts");
+      if (disposed || !boxRef.current) return;
+
+      const chart = api.init(boxRef.current, {
+        styles: {
+          grid: {
+            horizontal: { color: "#1a1f27" },
+            vertical: { color: "#1a1f27" },
+          },
+          candle: {
+            // 한국 증시 관행에 맞춰 상승 빨강, 하락 파랑
+            bar: {
+              upColor: "#ff5445",
+              downColor: "#4a90ff",
+              upBorderColor: "#ff5445",
+              downBorderColor: "#4a90ff",
+              upWickColor: "#ff5445",
+              downWickColor: "#4a90ff",
+            },
+            priceMark: {
+              high: { color: "#b3ada2" },
+              low: { color: "#b3ada2" },
+              last: {
+                upColor: "#ff5445",
+                downColor: "#4a90ff",
+                noChangeColor: "#7d8590",
+              },
+            },
+            tooltip: {
+              // 종목명을 감춰야 훈련이 됩니다. 기본 표시를 끕니다.
+              title: { show: false },
+              legend: {
+                template: [
+                  { title: "시", value: "{open}" },
+                  { title: "고", value: "{high}" },
+                  { title: "저", value: "{low}" },
+                  { title: "종", value: "{close}" },
+                ],
+              },
+            },
+          },
+          indicator: {
+            tooltip: { title: { show: true } },
+          },
+          xAxis: {
+            axisLine: { color: "#232932" },
+            tickLine: { color: "#232932" },
+            tickText: { color: "#7d8590" },
+          },
+          yAxis: {
+            axisLine: { color: "#232932" },
+            tickLine: { color: "#232932" },
+            tickText: { color: "#7d8590" },
+          },
+          crosshair: {
+            horizontal: {
+              line: { color: "#545c67" },
+              text: { backgroundColor: "#333b47" },
+            },
+            vertical: {
+              line: { color: "#545c67" },
+              text: { backgroundColor: "#333b47" },
+            },
+          },
+          overlay: {
+            line: { color: "#c8a15a", size: 1.5 },
+            point: {
+              color: "#c8a15a",
+              borderColor: "rgba(200,161,90,.25)",
+              activeColor: "#e9e5dd",
+            },
+            text: { color: "#e9e5dd" },
+          },
+        },
+      });
+
+      if (!chart) return;
+      chartRef.current = chart;
+
+      /*
+       * 좁은 화면에서 가격 눈금이 사라지는 일이 있었습니다. 화면 배치가
+       * 끝나기 전에 차트가 크기를 재서 생긴 문제라, 배치가 끝난 뒤 한 번 더
+       * 재게 합니다. 창 크기가 바뀔 때도 같이 다시 잽니다.
+       */
+      const remeasure = () => chartRef.current?.resize();
+      requestAnimationFrame(remeasure);
+      setTimeout(remeasure, 250);
+      window.addEventListener("resize", remeasure);
+      window.addEventListener("orientationchange", remeasure);
+      cleanupRef.current = () => {
+        window.removeEventListener("resize", remeasure);
+        window.removeEventListener("orientationchange", remeasure);
+      };
+
+      onReady?.();
+    })();
+
+    return () => {
+      disposed = true;
+      cleanupRef.current?.();
+      cleanupRef.current = null;
+      if (chartRef.current && api) {
+        api.dispose(chartRef.current);
+        chartRef.current = null;
+      }
+    };
+    // 최초 한 번만 만듭니다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useImperativeHandle(ref, () => ({
+    setData(bars) {
+      const chart = chartRef.current;
+      if (!chart) return;
+      chart.setSymbol({ ticker: "PRACTICE" });
+      chart.setPeriod({ type: "day", span: 1 });
+      chart.setDataLoader({
+        getBars: ({ callback }) => callback(bars, false),
+      });
+    },
+    startDraw(name) {
+      const id = chartRef.current?.createOverlay(name);
+      if (typeof id === "string") drawnRef.current.push(id);
+    },
+    clearDrawings() {
+      const chart = chartRef.current;
+      if (!chart) return;
+      for (const id of drawnRef.current) chart.removeOverlay({ id });
+      drawnRef.current = [];
+    },
+    undo() {
+      const id = drawnRef.current.pop();
+      if (id) chartRef.current?.removeOverlay({ id });
+    },
+    toggleIndicator(name, onCandle) {
+      const chart = chartRef.current;
+      if (!chart) return false;
+      const existing = indicatorsRef.current.get(name);
+      if (existing) {
+        chart.removeIndicator({ paneId: existing, name });
+        indicatorsRef.current.delete(name);
+        return false;
+      }
+      const paneId = chart.createIndicator(
+        onCandle ? { name, paneId: "candle_pane" } : name,
+        true,
+      );
+      if (typeof paneId === "string") indicatorsRef.current.set(name, paneId);
+      return true;
+    },
+    scrollToEnd() {
+      chartRef.current?.scrollToRealTime?.();
+    },
+  }));
+
+  return <div ref={boxRef} className="kline" />;
+}

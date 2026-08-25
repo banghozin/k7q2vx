@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const LINKS = [
+  { href: "/practice", label: "차트 훈련" },
   { href: "/notes", label: "매매노트" },
   { href: "/watchlist", label: "워치리스트" },
   { href: "/about", label: "읽는 법" },

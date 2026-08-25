@@ -166,6 +166,7 @@ button {
   align-items: center;
   gap: 1.25rem;
   height: 3.5rem;
+  min-width: 0;
 }
 
 .brand {
@@ -193,11 +194,25 @@ button {
   letter-spacing: -0.02em;
 }
 
+/*
+ * 메뉴가 늘어나면 좁은 화면에서 폭을 넘겨 **페이지 전체가 가로로 밀립니다.**
+ * 실제로 "차트 훈련"을 넣자마자 390px 화면에서 43px 이 넘쳐, 훈련 화면의
+ * 차트가 그만큼 넓게 그려지고 오른쪽 가격 눈금이 화면 밖으로 밀려났습니다.
+ * 넘치는 건 제 영역 안에서만 옆으로 밀리게 둡니다.
+ */
 .masthead__nav {
   margin-left: auto;
   display: flex;
   gap: 0.25rem;
   align-items: center;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.masthead__nav::-webkit-scrollbar {
+  display: none;
 }
 
 .navlink {
@@ -1143,6 +1158,382 @@ tbody tr:hover {
   font-size: 0.62rem;
   letter-spacing: 0.12em;
   color: var(--ink-4);
+}
+
+/* ══ 차트 훈련 ═══════════════════════════════════════════════════════
+   데스크톱은 화면을 가득 쓰는 작업대, 모바일은 세로로 쌓은 배치.
+   좁은 화면에서 도구를 옆에 붙여 두면 차트가 손톱만 해집니다.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.prac {
+  display: flex;
+  flex-direction: column;
+  /* 상단 바(3.5rem) + 테마 레일(약 2.4rem) 을 뺀 나머지를 전부 씁니다 */
+  height: calc(100vh - 6rem);
+  min-height: 30rem;
+  background: var(--ground-2);
+  border-top: 1px solid var(--rule);
+}
+
+/* ── 위쪽 정보 줄 ── */
+
+.prac__bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem clamp(0.75rem, 2vw, 1.25rem);
+  border-bottom: 1px solid var(--rule);
+  background: var(--ground);
+  flex-shrink: 0;
+}
+
+.prac__id {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.prac__eyebrow {
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  color: var(--accent);
+}
+
+.prac__name {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.prac__name--hidden {
+  color: var(--ink-4);
+  font-weight: 400;
+  font-size: 0.95rem;
+}
+
+.prac__namekr {
+  font-size: 0.74rem;
+  color: var(--ink-4);
+  font-weight: 400;
+}
+
+.prac__stat {
+  display: flex;
+  gap: 1rem;
+  margin-left: auto;
+  font-size: 0.76rem;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.prac__stat b {
+  color: var(--ink);
+}
+
+.prac__actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+/* 도구 서랍 여는 버튼은 좁은 화면에서만 */
+.prac__panelbtn {
+  display: none;
+}
+
+/* ── 가운데: 도구 + 차트 ── */
+
+.prac__body {
+  display: grid;
+  grid-template-columns: 13.5rem 1fr;
+  flex: 1;
+  min-height: 0;
+}
+
+.prac__tools {
+  border-right: 1px solid var(--rule);
+  padding: 0.9rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+  background: var(--ground);
+}
+
+.prac__tools h2 {
+  font-family: var(--font-sans), sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  color: var(--ink-4);
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.prac__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--rule-soft);
+  border: 1px solid var(--rule-soft);
+}
+
+.prac__tool {
+  background: var(--panel);
+  border: none;
+  padding: 0.5rem 0.35rem;
+  font-size: 0.75rem;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.prac__tool:hover {
+  background: var(--panel-2);
+  color: var(--ink);
+}
+
+.prac__tool[aria-pressed="true"] {
+  background: var(--brass);
+  color: #16130c;
+  font-weight: 600;
+}
+
+.prac__row {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.prac__row .btn {
+  flex: 1;
+  justify-content: center;
+  padding: 0.35rem 0.4rem;
+  font-size: 0.72rem;
+}
+
+/* 왼쪽 아래가 비어 보이지 않게, 이번 판 정보를 채워 둡니다 */
+.prac__meta dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--rule-soft);
+  border: 1px solid var(--rule-soft);
+}
+
+.prac__meta dl > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  background: var(--panel);
+  padding: 0.4rem 0.55rem;
+}
+
+.prac__meta dt {
+  font-size: 0.66rem;
+  color: var(--ink-4);
+}
+
+.prac__meta dd {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--ink-2);
+}
+
+.prac__note {
+  font-size: 0.68rem;
+  line-height: 1.65;
+  color: var(--ink-4);
+  margin: auto 0 0;
+  padding-top: 1rem;
+}
+
+.prac__note strong {
+  color: var(--ink-3);
+}
+
+.prac__chart {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.kline {
+  width: 100%;
+  height: 100%;
+}
+
+.prac__overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  align-items: center;
+  justify-content: center;
+  background: var(--ground-2);
+  color: var(--ink-3);
+  font-size: 0.9rem;
+}
+
+/* ── 아래쪽: 판단하고 정답 보는 줄 ── */
+
+.prac__foot {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.75rem clamp(0.75rem, 2vw, 1.25rem);
+  border-top: 1px solid var(--rule);
+  background: var(--ground);
+  flex-shrink: 0;
+  min-height: 3.5rem;
+}
+
+.prac__ask {
+  font-size: 0.88rem;
+  color: var(--ink-2);
+}
+
+.prac__ask b {
+  color: var(--ink);
+}
+
+.prac__choice {
+  display: flex;
+  gap: 0.45rem;
+  margin-left: auto;
+}
+
+.prac__up,
+.prac__down {
+  font-weight: 600;
+  min-width: 5.5rem;
+  justify-content: center;
+}
+
+.prac__up {
+  border-color: var(--up);
+  color: var(--up);
+}
+
+.prac__up:hover {
+  background: rgba(255, 84, 69, 0.12);
+  border-color: var(--up);
+}
+
+.prac__down {
+  border-color: var(--down);
+  color: var(--down);
+}
+
+.prac__down:hover {
+  background: rgba(74, 144, 255, 0.12);
+  border-color: var(--down);
+}
+
+.prac__result {
+  font-family: var(--font-serif), serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.prac__result.is-hit {
+  color: var(--brass);
+}
+
+.prac__result.is-miss {
+  color: var(--ink-3);
+}
+
+/* ── 태블릿 ── */
+
+@media (max-width: 1024px) {
+  .prac__body {
+    grid-template-columns: 11rem 1fr;
+  }
+
+  .prac__tool {
+    font-size: 0.72rem;
+    padding: 0.45rem 0.3rem;
+  }
+}
+
+/* ── 모바일: 도구를 서랍으로 빼고 차트에 화면을 다 줍니다 ── */
+
+@media (max-width: 760px) {
+  .prac {
+    height: calc(100vh - 6rem);
+    height: calc(100dvh - 6rem);
+  }
+
+  .prac__bar {
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+  }
+
+  .prac__stat {
+    order: 3;
+    width: 100%;
+    margin-left: 0;
+    font-size: 0.72rem;
+  }
+
+  .prac__panelbtn {
+    display: inline-flex;
+  }
+
+  .prac__body {
+    grid-template-columns: 1fr;
+    position: relative;
+  }
+
+  /* 도구는 차트 위로 미끄러져 나옵니다 */
+  .prac__tools {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: min(17rem, 82%);
+    z-index: 10;
+    border-right: 1px solid var(--rule-strong);
+    box-shadow: var(--shadow-lift);
+    transform: translateX(-101%);
+    transition: transform 0.2s ease;
+  }
+
+  .prac__tools.is-open {
+    transform: translateX(0);
+  }
+
+  .prac__grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* 손가락으로 누를 크기 */
+  .prac__tool {
+    padding: 0.7rem 0.4rem;
+    font-size: 0.8rem;
+  }
+
+  .prac__foot {
+    gap: 0.6rem;
+  }
+
+  .prac__choice {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .prac__choice .btn {
+    flex: 1;
+    justify-content: center;
+    padding: 0.65rem 0.5rem;
+  }
 }
 
 /* ── 안내 / 면책 ─────────────────────────────────────────────────── */
