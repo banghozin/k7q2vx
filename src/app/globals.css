@@ -1438,6 +1438,45 @@ tbody tr:hover {
   border-color: var(--down);
 }
 
+/* 그린 것 목록 — 하나씩 지울 수 있게 */
+.prac__drawn {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--rule-soft);
+  border: 1px solid var(--rule-soft);
+  max-height: 11rem;
+  overflow-y: auto;
+}
+
+.prac__drawn li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  background: var(--panel);
+  padding: 0.3rem 0.2rem 0.3rem 0.55rem;
+  font-size: 0.72rem;
+  color: var(--ink-2);
+}
+
+.prac__drawn button {
+  background: none;
+  border: none;
+  color: var(--ink-4);
+  cursor: pointer;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.prac__drawn button:hover {
+  color: var(--up);
+}
+
 /* 내가 그은 수평선을 실제가 건드렸는지 */
 .prac__levels {
   list-style: none;

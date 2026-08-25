@@ -41,16 +41,45 @@ const FORWARD = 60;
 /** 오른쪽에 앞날을 그릴 빈 자리 (px) */
 const FUTURE_SPACE = 260;
 
-const DRAW_TOOLS: { key: string; label: string; hint: string }[] = [
-  { key: "segment", label: "추세선", hint: "두 점을 이어 선을 긋습니다" },
-  { key: "horizontalStraightLine", label: "수평선", hint: "지지·저항 자리" },
-  { key: "fibonacciLine", label: "피보나치", hint: "고점과 저점을 찍습니다" },
-  { key: "priceChannelLine", label: "채널", hint: "세 점으로 평행 채널" },
-  { key: "parallelStraightLine", label: "평행선", hint: "세 점으로 평행선" },
-  { key: "rayLine", label: "반직선", hint: "한 방향으로 뻗는 선" },
-  { key: "brush", label: "자유선", hint: "손으로 그리듯" },
-  { key: "simpleAnnotation", label: "메모", hint: "파동 번호 등을 적을 때" },
+/**
+ * 그리기 도구.
+ *
+ * `elliott*` 과 `fibRetracement` 는 직접 만든 것입니다 — overlays.ts 참고.
+ * 기본 피보나치는 선이 화면 끝까지 뻗고 라벨이 왼쪽에 뭉쳐 붙어서
+ * 실제 분석 화면과 딴판이라 새로 만들었습니다.
+ */
+const DRAW_GROUPS: {
+  title: string;
+  tools: { key: string; label: string; hint: string }[];
+}[] = [
+  {
+    title: "파동",
+    tools: [
+      { key: "elliottImpulse", label: "12345 파동", hint: "다섯 점을 순서대로 찍으면 번호가 붙습니다" },
+      { key: "elliottCorrection", label: "ABC 조정", hint: "세 점을 찍습니다" },
+      { key: "elliottTriangle", label: "abcde 삼각형", hint: "다섯 점을 찍습니다" },
+      { key: "fibRetracement", label: "피보나치", hint: "고점과 저점 두 점. 찍은 구간에만 그려집니다" },
+    ],
+  },
+  {
+    title: "선",
+    tools: [
+      { key: "segment", label: "추세선", hint: "찍은 두 점 사이만" },
+      { key: "straightLine", label: "연장선", hint: "양쪽으로 끝없이 뻗습니다" },
+      { key: "rayLine", label: "반직선", hint: "한쪽으로만 뻗습니다" },
+      { key: "horizontalStraightLine", label: "수평선", hint: "지지·저항 자리" },
+      { key: "priceChannelLine", label: "채널", hint: "세 점으로 평행 채널" },
+      { key: "parallelStraightLine", label: "평행선", hint: "세 점으로 평행선" },
+      { key: "brush", label: "자유선", hint: "손으로 그리듯" },
+      { key: "simpleAnnotation", label: "메모", hint: "글자를 적습니다" },
+    ],
+  },
 ];
+
+/** 도구 이름 → 목록에 보여줄 한국어 */
+const TOOL_NAME: Record<string, string> = Object.fromEntries(
+  DRAW_GROUPS.flatMap((g) => g.tools.map((t) => [t.key, t.label])),
+);
 
 // 짝수로 맞춥니다 — 2열 배치에서 홀수면 빈 칸이 남아 어설퍼 보입니다
 const INDICATORS: { key: string; label: string; onCandle: boolean }[] = [
@@ -87,6 +116,7 @@ export function PracticeBoard() {
   const [rounds, setRounds] = useState(0);
   const [myLinesOn, setMyLinesOn] = useState(true);
   const [tool, setTool] = useState<string | null>(null);
+  const [drawings, setDrawings] = useState<{ id: string; name: string }[]>([]);
   const [activeInd, setActiveInd] = useState<Set<string>>(new Set());
   const [chartReady, setChartReady] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -98,6 +128,7 @@ export function PracticeBoard() {
     setPanelOpen(false);
     setMyLinesOn(true);
     chart.current?.clearDrawings();
+    setDrawings([]);
 
     const pool = allTickers();
     // 여러 번 시도합니다 — 상장이 짧은 종목은 훈련에 쓸 수 없습니다
@@ -213,6 +244,15 @@ export function PracticeBoard() {
     chart.current?.setDrawingsVisible(next);
   }
 
+  const refreshDrawings = useCallback(() => {
+    setDrawings(chart.current?.listDrawings() ?? []);
+  }, []);
+
+  /** 봉 전체가 한 화면에 들어오게 맞춥니다 */
+  const fitAll = useCallback(() => {
+    chart.current?.fitAll(VISIBLE + shown);
+  }, [shown]);
+
   const cutDate = round
     ? fmtDate.format(new Date((round.bars[round.cut - 1]?.time ?? 0) * 1000))
     : "";
@@ -259,6 +299,14 @@ export function PracticeBoard() {
           >
             도구
           </button>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            title="봉 전체가 한 화면에 들어오게 맞춥니다"
+            onClick={fitAll}
+          >
+            전체 보기
+          </button>
           <button type="button" className="btn" onClick={() => void newRound()}>
             새 문제
           </button>
@@ -267,43 +315,76 @@ export function PracticeBoard() {
 
       <div className="prac__body">
         <aside className={`prac__tools${panelOpen ? " is-open" : ""}`}>
-          <section>
-            <h2>그리기</h2>
-            <div className="prac__grid">
-              {DRAW_TOOLS.map((t) => (
+          {DRAW_GROUPS.map((g) => (
+            <section key={g.title}>
+              <h2>{g.title}</h2>
+              <div className="prac__grid">
+                {g.tools.map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    className="prac__tool"
+                    aria-pressed={tool === t.key}
+                    title={t.hint}
+                    onClick={() => {
+                      setTool(t.key);
+                      chart.current?.startDraw(t.key);
+                      setPanelOpen(false);
+                      // 그리고 나면 목록이 바뀌므로 조금 뒤 새로고침합니다
+                      setTimeout(refreshDrawings, 400);
+                    }}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))}
+
+          {drawings.length > 0 && (
+            <section>
+              <h2>그린 것 {drawings.length}개</h2>
+              <ul className="prac__drawn">
+                {drawings.map((d) => (
+                  <li key={d.id}>
+                    <span>{TOOL_NAME[d.name] ?? d.name}</span>
+                    <button
+                      type="button"
+                      aria-label={`${TOOL_NAME[d.name] ?? d.name} 지우기`}
+                      onClick={() => {
+                        chart.current?.removeDrawing(d.id);
+                        refreshDrawings();
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <div className="prac__row">
                 <button
-                  key={t.key}
                   type="button"
-                  className="prac__tool"
-                  aria-pressed={tool === t.key}
-                  title={t.hint}
+                  className="btn btn--ghost"
                   onClick={() => {
-                    setTool(t.key);
-                    chart.current?.startDraw(t.key);
-                    setPanelOpen(false);
+                    chart.current?.undo();
+                    refreshDrawings();
                   }}
                 >
-                  {t.label}
+                  되돌리기
                 </button>
-              ))}
-            </div>
-            <div className="prac__row">
-              <button
-                type="button"
-                className="btn btn--ghost"
-                onClick={() => chart.current?.undo()}
-              >
-                되돌리기
-              </button>
-              <button
-                type="button"
-                className="btn btn--ghost"
-                onClick={() => chart.current?.clearDrawings()}
-              >
-                모두 지우기
-              </button>
-            </div>
-          </section>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => {
+                    chart.current?.clearDrawings();
+                    refreshDrawings();
+                  }}
+                >
+                  모두 지우기
+                </button>
+              </div>
+            </section>
+          )}
 
           <section>
             <h2>보조지표</h2>

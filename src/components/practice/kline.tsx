@@ -35,8 +35,17 @@ export type KlineHandle = {
   setDrawingsVisible: (visible: boolean) => void;
   /** 내가 그은 수평선들의 가격 — 실제가 그 자리를 건드렸는지 대조할 때 씁니다 */
   horizontalLevels: () => number[];
-  /** 그린 것이 하나라도 있는가 */
-  hasDrawings: () => boolean;
+  /** 지금 그려져 있는 것들의 목록 (개별로 지우기 위해) */
+  listDrawings: () => { id: string; name: string }[];
+  /** 하나만 지웁니다 */
+  removeDrawing: (id: string) => void;
+  /**
+   * 봉 전체가 한 화면에 들어오게 맞춥니다.
+   *
+   * 이게 없으면 파동을 길게 그었을 때 왼쪽이 화면 밖으로 밀려 안 보입니다.
+   * 검증 중에 실제로 ①~⑤ 라벨이 통째로 사라져 보였습니다.
+   */
+  fitAll: (barCount: number) => void;
 };
 
 export function Kline({
@@ -60,6 +69,10 @@ export function Kline({
       // 브라우저에서만 불러옵니다 — 위 주석 참고
       api = await import("klinecharts");
       if (disposed || !boxRef.current) return;
+
+      // 트레이딩뷰 방식으로 새로 만든 도구들을 등록합니다 (overlays.ts 참고)
+      const { CUSTOM_OVERLAYS } = await import("./overlays");
+      for (const t of CUSTOM_OVERLAYS) api.registerOverlay(t);
 
       const chart = api.init(boxRef.current, {
         styles: {
@@ -229,8 +242,23 @@ export function Kline({
         .map((o) => o.points?.[0]?.value)
         .filter((v): v is number => typeof v === "number");
     },
-    hasDrawings() {
-      return (chartRef.current?.getOverlays().length ?? 0) > 0;
+    listDrawings() {
+      return (chartRef.current?.getOverlays() ?? []).map((o) => ({
+        id: o.id,
+        name: o.name,
+      }));
+    },
+    removeDrawing(id) {
+      chartRef.current?.removeOverlay({ id });
+      drawnRef.current = drawnRef.current.filter((x) => x !== id);
+    },
+    fitAll(barCount) {
+      const chart = chartRef.current;
+      const box = boxRef.current;
+      if (!chart || !box || barCount <= 0) return;
+      // 오른쪽 가격축과 앞날 여백을 뺀 폭을 봉 수로 나눕니다
+      const usable = box.clientWidth - 70 - chart.getOffsetRightDistance();
+      chart.setBarSpace(Math.max(1.5, usable / barCount));
     },
   }));
 
