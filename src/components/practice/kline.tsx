@@ -23,8 +23,20 @@ export type KlineHandle = {
   undo: () => void;
   /** 보조지표를 켜고 끕니다 */
   toggleIndicator: (name: string, onCandle: boolean) => boolean;
-  /** 오른쪽 끝으로 붙입니다 */
-  scrollToEnd: () => void;
+  /**
+   * 오른쪽에 빈 자리를 만듭니다.
+   *
+   * **이게 훈련의 핵심 장치입니다.** 마지막 봉 오른쪽에 여백이 있어야 앞날
+   * 구간에 선을 그을 수 있고, 나중에 진짜 캔들이 그 자리를 채우면서
+   * 내가 그은 선과 실제 경로가 겹쳐 보입니다.
+   */
+  setFutureSpace: (px: number) => void;
+  /** 내가 그린 것을 잠시 감추거나 다시 보입니다 (겹쳐 보기 비교용) */
+  setDrawingsVisible: (visible: boolean) => void;
+  /** 내가 그은 수평선들의 가격 — 실제가 그 자리를 건드렸는지 대조할 때 씁니다 */
+  horizontalLevels: () => number[];
+  /** 그린 것이 하나라도 있는가 */
+  hasDrawings: () => boolean;
 };
 
 export function Kline({
@@ -196,8 +208,29 @@ export function Kline({
       if (typeof paneId === "string") indicatorsRef.current.set(name, paneId);
       return true;
     },
-    scrollToEnd() {
-      chartRef.current?.scrollToRealTime?.();
+    setFutureSpace(px) {
+      chartRef.current?.setOffsetRightDistance(px);
+    },
+    setDrawingsVisible(visible) {
+      const chart = chartRef.current;
+      if (!chart) return;
+      for (const id of drawnRef.current) chart.overrideOverlay({ id, visible });
+    },
+    horizontalLevels() {
+      const chart = chartRef.current;
+      if (!chart) return [];
+      return chart
+        .getOverlays()
+        .filter((o) =>
+          ["horizontalStraightLine", "horizontalRayLine", "horizontalSegment", "priceLine"].includes(
+            o.name,
+          ),
+        )
+        .map((o) => o.points?.[0]?.value)
+        .filter((v): v is number => typeof v === "number");
+    },
+    hasDrawings() {
+      return (chartRef.current?.getOverlays().length ?? 0) > 0;
     },
   }));
 

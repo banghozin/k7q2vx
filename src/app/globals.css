@@ -1438,17 +1438,25 @@ tbody tr:hover {
   border-color: var(--down);
 }
 
-.prac__result {
-  font-family: var(--font-serif), serif;
-  font-size: 1.05rem;
-  font-weight: 600;
+/* 내가 그은 수평선을 실제가 건드렸는지 */
+.prac__levels {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--rule-soft);
+  border: 1px solid var(--rule-soft);
 }
 
-.prac__result.is-hit {
-  color: var(--brass);
-}
-
-.prac__result.is-miss {
+.prac__levels li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  background: var(--panel);
+  padding: 0.35rem 0.55rem;
+  font-size: 0.72rem;
   color: var(--ink-3);
 }
 
