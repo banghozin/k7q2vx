@@ -18,8 +18,14 @@ tsconfig.tsbuildinfo
 *.log
 .DS_Store
 
+# 그림 검토용으로 뽑아낸 미리보기 (저장소에 둘 이유 없음)
+_preview-*.svg
+
 # ── 공개 저장소이므로 올리지 않는 것 ────────────────────────────
 # 아래 두 파일에는 운영자 개인 정보와 사업 전략이 들어 있습니다.
 # PC 에는 그대로 남아 작업에 쓰이고, 저장소에만 올라가지 않습니다.
 CLAUDE.md
 첫 메시지.txt
+
+# Claude Code 개인 설정 (기기마다 다름, 공유 대상 아님)
+.claude/settings.local.json

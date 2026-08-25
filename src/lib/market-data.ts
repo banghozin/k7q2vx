@@ -15,6 +15,7 @@ import layersJson from "@/data/generated/layers.json";
 import syncJson from "@/data/generated/sync.json";
 import leadersJson from "@/data/generated/leaders.json";
 import briefingJson from "@/data/generated/briefing.json";
+import rotationJson from "@/data/generated/rotation.json";
 
 export type StockMetrics = {
   last: number | null;
@@ -112,6 +113,22 @@ export type ThemeBriefing = {
   rotated: boolean;
 };
 
+/** 한 층의 순위 궤적 */
+export type RotationLayer = {
+  n: number;
+  key: string;
+  name: string;
+  ranks: (number | null)[];
+  rets: (number | null)[];
+};
+
+export type ThemeRotation = {
+  dates: string[];
+  layers: RotationLayer[];
+  riser: string | null;
+  faller: string | null;
+};
+
 type Meta = { generatedAt: string; asOf: string; source: string };
 
 const stocksData = stocksJson as unknown as Meta & {
@@ -131,8 +148,17 @@ const briefingData = briefingJson as unknown as Meta & {
   themes: Record<string, ThemeBriefing>;
 };
 
+const rotationData = rotationJson as unknown as Meta & {
+  themes: Record<string, ThemeRotation>;
+};
+
 export function getBriefing(themeSlug: string): ThemeBriefing | null {
   return briefingData?.themes?.[themeSlug] ?? null;
+}
+
+export function getRotation(themeSlug: string): ThemeRotation | null {
+  const r = rotationData?.themes?.[themeSlug];
+  return r?.dates?.length ? r : null;
 }
 
 /** 자리바꿈이 뚜렷한 테마들 — 홈의 한 줄 브리핑 재료 */

@@ -1306,6 +1306,132 @@ tbody tr:hover {
   font-size: 0.7rem;
 }
 
+/* ── 층 순위 변화 그림 ────────────────────────────────────────────── */
+
+.rot {
+  margin: 0;
+}
+
+.rot__cap {
+  font-size: 0.92rem;
+  line-height: 1.75;
+  color: var(--ink-2);
+  max-width: var(--measure);
+  margin-bottom: 1rem;
+}
+
+.rot__cap b {
+  font-weight: 600;
+}
+
+/*
+ * 좁은 화면에서는 그림만 가로로 밀립니다. 폭에 맞춰 줄이면 글자가 5px 이
+ * 되어 아무도 못 읽습니다. 넓은 것은 제 영역 안에서 스크롤하는 게 맞습니다.
+ */
+.rot__scroll {
+  overflow-x: auto;
+  border: 1px solid var(--rule);
+  background: var(--panel);
+}
+
+.rot__svg {
+  display: block;
+  width: 100%;
+  min-width: 640px;
+  height: auto;
+}
+
+.rot__rank,
+.rot__date {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  fill: var(--ink-4);
+}
+
+/*
+ * 배경 선은 물러나 있어야 합니다. 8개 층의 순위는 주마다 오르내려서,
+ * 다 같은 굵기로 그리면 스파게티가 되고 정작 하고 싶은 이야기(무엇이
+ * 올라왔고 무엇이 내려갔나)가 파묻힙니다. 맥락은 주되 주인공을 가리지
+ * 않는 선까지만 보이게 합니다. 하나에 마우스를 올리면 그것만 드러납니다.
+ */
+.rot__line {
+  stroke: var(--ink-3);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  opacity: 0.28;
+  transition: opacity 0.15s, stroke-width 0.15s;
+}
+
+.rot__line.is-riser {
+  stroke: var(--up);
+  stroke-width: 2.5;
+  opacity: 1;
+}
+
+.rot__line.is-faller {
+  stroke: var(--down);
+  stroke-width: 2.5;
+  opacity: 1;
+}
+
+.rot__svg:hover .rot__line {
+  opacity: 0.15;
+}
+
+.rot__svg .rot__line:hover {
+  opacity: 1;
+  stroke-width: 2.5;
+  stroke: var(--ink);
+}
+
+.rot__label {
+  font-family: var(--font-sans), sans-serif;
+  font-size: 12px;
+  fill: var(--ink-3);
+}
+
+.rot__label.is-riser {
+  fill: var(--up);
+  font-weight: 600;
+}
+
+.rot__label.is-faller {
+  fill: var(--down);
+  font-weight: 600;
+}
+
+.rot__table {
+  margin-top: 1rem;
+}
+
+.rot__table > summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--ink-3);
+  padding: 0.3rem 0;
+}
+
+.rot__table > summary:hover {
+  color: var(--ink);
+}
+
+.rot__table .tablewrap {
+  margin-top: 0.6rem;
+}
+
+.rot__note {
+  font-size: 0.76rem;
+  color: var(--ink-4);
+  margin-top: 0.85rem;
+  max-width: var(--measure);
+  line-height: 1.7;
+}
+
+.rot__note strong {
+  color: var(--ink-3);
+}
+
 /* ── 동조율 ───────────────────────────────────────────────────────── */
 
 .syncpick {

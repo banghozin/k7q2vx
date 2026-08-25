@@ -785,6 +785,146 @@ async function main() {
     };
   }
 
+  /* ── 6. 층 순환 — 시간축 ──────────────────────────────────────── */
+
+  /**
+   * 지난 반년 동안 층 순위가 어떻게 뒤바뀌었는지.
+   *
+   * 지금까지의 화면은 "오늘" 한 시점만 보여줬습니다. 그래서 "메모리에서
+   * 광통신으로 옮겨갔다"를 말로만 주장하고 그림으로 증명하지 못했습니다.
+   * 여기서는 5거래일 간격으로 과거 시점을 되짚어, 각 시점에서 층들을
+   * 20일 성과로 줄 세운 **순위**를 기록합니다.
+   *
+   * 수익률이 아니라 순위를 기록하는 이유: 시장 전체가 빠진 구간에는 모든
+   * 층의 수익률이 같이 내려가 선이 뭉쳐 버립니다. 순위는 그 공통 요인에
+   * 영향을 받지 않아 "누가 누구를 앞질렀나"만 남습니다.
+   */
+  const ROT_STEP = 5; // 5거래일(약 1주) 간격
+  const ROT_POINTS = 26; // 약 반년
+
+  type RotLayer = {
+    n: number;
+    key: string;
+    name: string;
+    /** 각 시점의 순위 (1이 가장 앞선 층). 데이터가 없으면 null */
+    ranks: (number | null)[];
+    /** 각 시점의 20일 중앙값 수익률 */
+    rets: (number | null)[];
+  };
+
+  const rotation: Record<
+    string,
+    {
+      dates: string[];
+      layers: RotLayer[];
+      /** 창 전체에서 순위가 가장 많이 올라간 층 / 내려간 층 */
+      riser: string | null;
+      faller: string | null;
+    }
+  > = {};
+
+  // 티커별로 (날짜 배열, 수정종가 배열)을 미리 만들어 되짚기를 빠르게 합니다
+  const seriesIndex = new Map<string, { d: string[]; a: number[] }>();
+  for (const [t, bars] of byTicker) {
+    seriesIndex.set(t, {
+      d: bars.map((b) => dateKey(b.t)),
+      a: bars.map((b) => b.a),
+    });
+  }
+
+  /** 기준일 d 시점에서 이 종목의 20거래일 수익률 */
+  function retAsOf(ticker: string, d: string, lookback = 20): number | null {
+    const s = seriesIndex.get(ticker);
+    if (!s) return null;
+    // d 이하인 마지막 봉을 이분 탐색
+    let lo = 0,
+      hi = s.d.length - 1,
+      idx = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (s.d[mid] <= d) {
+        idx = mid;
+        lo = mid + 1;
+      } else hi = mid - 1;
+    }
+    if (idx < lookback) return null;
+    const past = s.a[idx - lookback];
+    const now = s.a[idx];
+    if (!(past > 0)) return null;
+    const pct = ((now - past) / past) * 100;
+    if (!Number.isFinite(pct) || Math.abs(pct) > GUARD[20]) return null;
+    return round(pct);
+  }
+
+  {
+    const cal = calendar();
+    const snapIdx: number[] = [];
+    for (let k = ROT_POINTS - 1; k >= 0; k--) {
+      const i = cal.length - 1 - k * ROT_STEP;
+      if (i >= 0) snapIdx.push(i);
+    }
+    const dates = snapIdx.map((i) => cal[i]);
+
+    for (const theme of THEMES) {
+      const rows: RotLayer[] = theme.layers.map((l) => ({
+        n: l.n,
+        key: l.key,
+        name: l.name,
+        ranks: [],
+        rets: [],
+      }));
+
+      for (const d of dates) {
+        // 각 층의 이 시점 20일 중앙값
+        const vals = theme.layers.map((l) =>
+          median(
+            l.stocks
+              .map((s) => retAsOf(s.ticker, d))
+              .filter((v): v is number => v != null),
+          ),
+        );
+
+        const order = vals
+          .map((v, i) => ({ v, i }))
+          .filter((x): x is { v: number; i: number } => x.v != null)
+          .sort((a, b) => b.v - a.v);
+
+        const rankOf = new Map<number, number>();
+        order.forEach((x, r) => rankOf.set(x.i, r + 1));
+
+        rows.forEach((row, i) => {
+          row.rets.push(vals[i]);
+          row.ranks.push(rankOf.get(i) ?? null);
+        });
+      }
+
+      // 창의 처음과 끝 순위를 비교해 가장 많이 오르내린 층을 찾습니다
+      const delta = rows.map((r) => {
+        const first = r.ranks.find((v) => v != null) ?? null;
+        const last = [...r.ranks].reverse().find((v) => v != null) ?? null;
+        return first != null && last != null ? first - last : null;
+      });
+      let riser: string | null = null;
+      let faller: string | null = null;
+      let best = 0;
+      let worst = 0;
+      rows.forEach((r, i) => {
+        const dv = delta[i];
+        if (dv == null) return;
+        if (dv > best) {
+          best = dv;
+          riser = r.key;
+        }
+        if (dv < worst) {
+          worst = dv;
+          faller = r.key;
+        }
+      });
+
+      rotation[theme.slug] = { dates, layers: rows, riser, faller };
+    }
+  }
+
   /* ── 저장 ────────────────────────────────────────────────────── */
 
   await mkdir(OUT_DIR, { recursive: true });
@@ -801,6 +941,16 @@ async function main() {
     ["layers.json", { ...meta, themes: layers }],
     ["sync.json", { ...meta, minEvents: MIN_EVENTS, themes: sync }],
     ["leaders.json", { ...meta, themes: leaders }],
+    [
+      "rotation.json",
+      {
+        ...meta,
+        stepDays: ROT_STEP,
+        points: ROT_POINTS,
+        themes: rotation,
+        note: "각 시점에서 층들을 20일 성과로 줄 세운 순위입니다. 수익률이 아니라 순위를 쓰는 이유는, 시장 전체가 빠진 구간에는 모든 층이 같이 내려가 비교가 되지 않기 때문입니다. 지나간 기록이며 앞날에 대한 말이 아닙니다.",
+      },
+    ],
     [
       "briefing.json",
       {

@@ -9,11 +9,13 @@ import { SyncTable } from "@/components/sync-table";
 import { LeaderPanel } from "@/components/leader-panel";
 import { fetchNews, matchTheme } from "@/lib/sbhnews";
 import { ThemeBriefingLine } from "@/components/briefing";
+import { RotationChart } from "@/components/rotation-chart";
 import {
   asOf,
   getBriefing,
   getLayerHeat,
   getLeaders,
+  getRotation,
   getSync,
   hasMarketData,
 } from "@/lib/market-data";
@@ -54,6 +56,7 @@ export default async function ThemePage({
   const sync = getSync(theme.slug);
   const leaders = getLeaders(theme.slug);
   const brief = getBriefing(theme.slug);
+  const rot = getRotation(theme.slug);
 
   const news = matchTheme(await fetchNews(), theme.newsKeywords, 6);
 
@@ -101,6 +104,18 @@ export default async function ThemePage({
               씁니다. 막대를 누르면 그 층으로 내려갑니다.
             </p>
             <LayerHeatMap themeSlug={theme.slug} layers={heat} />
+          </section>
+        )}
+
+        {rot && (
+          <section className="section" id="rotation">
+            <h2 className="section__title">어느 층에서 어느 층으로 옮겨갔나</h2>
+            <p className="section__sub">
+              지난 반년 동안 층들의 순위가 어떻게 뒤바뀌었는지입니다. 이 사이트가
+              하려던 일이 바로 이것 — <strong>&ldquo;테마가 빠졌다&rdquo;가 아니라 &ldquo;테마
+              안에서 어디로 옮겨갔다&rdquo;</strong>를 보여주는 것입니다.
+            </p>
+            <RotationChart rotation={rot} />
           </section>
         )}
 

@@ -21,6 +21,7 @@ const EMPTY: Record<string, unknown> = {
   "sync.json": { generatedAt: "", asOf: "", source: "", minEvents: 10, themes: {} },
   "leaders.json": { generatedAt: "", asOf: "", source: "", themes: {} },
   "briefing.json": { generatedAt: "", asOf: "", source: "", themes: {} },
+  "rotation.json": { generatedAt: "", asOf: "", source: "", themes: {} },
 };
 
 mkdirSync(DIR, { recursive: true });
