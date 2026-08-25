@@ -68,25 +68,21 @@ export function WatchlistView() {
               const places = placementsOf(it.ticker);
               return (
                 <tr key={it.ticker}>
-                  <td>
+                  <td data-label="티커">
                     <button
                       type="button"
-                      className="mono"
+                      className="linkish mono"
                       onClick={() => open(it.ticker, it.name)}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        padding: 0,
-                        cursor: "pointer",
-                        fontWeight: 600,
-                        fontSize: ".9rem",
-                      }}
+                      style={{ fontSize: ".95rem" }}
                     >
                       {it.ticker}
                     </button>
+                    <span className="synctable__name">{it.name}</span>
                   </td>
-                  <td style={{ color: "var(--ink-3)" }}>{it.name}</td>
-                  <td>
+                  <td data-label="회사" style={{ color: "var(--ink-3)" }}>
+                    {it.name}
+                  </td>
+                  <td data-label="올라 있는 층" className="cell-wide">
                     <div
                       style={{ display: "flex", flexWrap: "wrap", gap: ".3rem" }}
                     >
@@ -108,14 +104,14 @@ export function WatchlistView() {
                       )}
                     </div>
                   </td>
-                  <td>
+                  <td data-label="">
                     <button
                       type="button"
                       className="btn btn--ghost"
                       style={{ padding: ".2rem .5rem", fontSize: ".75rem" }}
                       onClick={() => remove(it.ticker)}
                     >
-                      빼기
+                      워치리스트에서 빼기
                     </button>
                   </td>
                 </tr>

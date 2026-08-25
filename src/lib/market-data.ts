@@ -1,0 +1,199 @@
+/**
+ * 계산된 시장 데이터를 읽습니다.
+ *
+ * `scripts/compute.ts` 가 만든 JSON 을 그대로 가져와 빌드에 굽습니다.
+ * 하루 1회 갱신이라 배포도 하루 1회면 충분해, 원격에서 실시간으로 읽는
+ * 복잡한 구조를 쓰지 않습니다. (갱신 주기를 늘리게 되면 이 파일 하나만
+ * raw.githubusercontent.com 을 읽도록 바꾸면 됩니다.)
+ *
+ * 파일이 아직 없을 수도 있으므로 — 처음 클론했거나 계산을 안 돌린 경우 —
+ * 모든 조회 함수는 값이 없으면 null 을 돌려주고, 화면은 "—" 로 표시합니다.
+ */
+
+import stocksJson from "@/data/generated/stocks.json";
+import layersJson from "@/data/generated/layers.json";
+import syncJson from "@/data/generated/sync.json";
+import leadersJson from "@/data/generated/leaders.json";
+
+export type StockMetrics = {
+  last: number | null;
+  ret1: number | null;
+  ret5: number | null;
+  ret20: number | null;
+  ret60: number | null;
+  rs20: number | null;
+  dollarVol: number | null;
+  volRatio: number | null;
+  pos52: number | null;
+  bars: number;
+};
+
+export type LayerHeat = {
+  n: number;
+  key: string;
+  name: string;
+  ret5: number | null;
+  ret20: number | null;
+  up: number;
+  total: number;
+  rank20: number | null;
+  best: string | null;
+  worst: string | null;
+};
+
+export type SyncMember = {
+  ticker: string;
+  hits: number;
+  events: number;
+  rate: number | null;
+  avgReturn: number | null;
+  response: number | null;
+  partial: boolean;
+};
+
+export type ThemeSync = {
+  leader: string;
+  threshold: number;
+  events: number;
+  window: number;
+  leaderAvg: number | null;
+  members: SyncMember[];
+  note: string;
+};
+
+export type LeaderRow = {
+  ticker: string;
+  score: number;
+  pull: number | null;
+  lead: number | null;
+  rs: number | null;
+  flow: number | null;
+  pullDays: number;
+  peripheral: boolean;
+};
+
+export type ThemeLeaders = {
+  ranked: LeaderRow[];
+  handover: { from: string; to: string; agoDays: number } | null;
+  margin: number | null;
+  close: boolean;
+  note: string;
+};
+
+type Meta = { generatedAt: string; asOf: string; source: string };
+
+const stocksData = stocksJson as unknown as Meta & {
+  stocks: Record<string, StockMetrics>;
+};
+const layersData = layersJson as unknown as Meta & {
+  themes: Record<string, { layers: LayerHeat[] }>;
+};
+const syncData = syncJson as unknown as Meta & {
+  minEvents: number;
+  themes: Record<string, ThemeSync>;
+};
+const leadersData = leadersJson as unknown as Meta & {
+  themes: Record<string, ThemeLeaders>;
+};
+
+/** 데이터 기준일 (미국장 마지막 거래일) */
+export const asOf: string | null = stocksData?.asOf ?? null;
+export const generatedAt: string | null = stocksData?.generatedAt ?? null;
+export const hasMarketData = Boolean(
+  stocksData?.stocks && Object.keys(stocksData.stocks).length > 0,
+);
+
+export function getStock(ticker: string): StockMetrics | null {
+  return stocksData?.stocks?.[ticker.toUpperCase()] ?? null;
+}
+
+export function getLayerHeat(themeSlug: string): LayerHeat[] {
+  return layersData?.themes?.[themeSlug]?.layers ?? [];
+}
+
+export function getLayerHeatOne(
+  themeSlug: string,
+  layerN: number,
+): LayerHeat | null {
+  return getLayerHeat(themeSlug).find((l) => l.n === layerN) ?? null;
+}
+
+export function getSync(themeSlug: string): ThemeSync | null {
+  return syncData?.themes?.[themeSlug] ?? null;
+}
+
+export function getLeaders(themeSlug: string): ThemeLeaders | null {
+  return leadersData?.themes?.[themeSlug] ?? null;
+}
+
+/** 이 테마에서 계산된 대장주 (곁다리 제외). 없으면 null */
+export function getLeaderTicker(themeSlug: string): string | null {
+  const l = getLeaders(themeSlug);
+  if (!l) return null;
+  return l.ranked.find((r) => !r.peripheral)?.ticker ?? null;
+}
+
+/** 손바뀜이 감지된 테마들 */
+export function handovers(): {
+  slug: string;
+  from: string;
+  to: string;
+  agoDays: number;
+}[] {
+  const out: { slug: string; from: string; to: string; agoDays: number }[] = [];
+  for (const [slug, v] of Object.entries(leadersData?.themes ?? {})) {
+    if (v.handover) out.push({ slug, ...v.handover });
+  }
+  return out;
+}
+
+/** 전 테마를 가로질러 20일 성과 상·하위 층 */
+export function hottestLayers(limit = 3): {
+  slug: string;
+  layer: LayerHeat;
+}[] {
+  const all: { slug: string; layer: LayerHeat }[] = [];
+  for (const [slug, v] of Object.entries(layersData?.themes ?? {})) {
+    for (const layer of v.layers) {
+      if (layer.ret20 != null) all.push({ slug, layer });
+    }
+  }
+  all.sort((a, b) => (b.layer.ret20 as number) - (a.layer.ret20 as number));
+  return all.slice(0, limit);
+}
+
+export function coldestLayers(limit = 3): {
+  slug: string;
+  layer: LayerHeat;
+}[] {
+  const all: { slug: string; layer: LayerHeat }[] = [];
+  for (const [slug, v] of Object.entries(layersData?.themes ?? {})) {
+    for (const layer of v.layers) {
+      if (layer.ret20 != null) all.push({ slug, layer });
+    }
+  }
+  all.sort((a, b) => (a.layer.ret20 as number) - (b.layer.ret20 as number));
+  return all.slice(0, limit);
+}
+
+/* ── 화면 표기 도우미 ─────────────────────────────────────────────── */
+
+/** 등락률을 "+3.2%" 형태로. 값이 없으면 "—" */
+export function pct(v: number | null | undefined, digits = 1): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  return `${v > 0 ? "+" : ""}${v.toFixed(digits)}%`;
+}
+
+/** 한국 증시 관행: 상승 빨강, 하락 파랑 */
+export function tone(v: number | null | undefined): "up" | "down" | "" {
+  if (v == null || !Number.isFinite(v) || v === 0) return "";
+  return v > 0 ? "up" : "down";
+}
+
+/** 큰 금액을 읽기 쉽게 — 1.2조 / 340억 같은 식은 달러라 어색하므로 M/B 로 */
+export function money(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(0)}M`;
+  return `$${Math.round(v).toLocaleString("en-US")}`;
+}

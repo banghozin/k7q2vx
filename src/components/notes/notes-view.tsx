@@ -569,13 +569,22 @@ function ReasonStats({ trades }: { trades: Trade[] }) {
         <tbody>
           {rows.map((r) => (
             <tr key={r.tag}>
-              <td>{r.tag}</td>
-              <td className="mono">{r.total}</td>
-              <td className="mono">{r.win}</td>
-              <td className={`mono ${r.sumR >= 0 ? "up" : "down"}`}>
+              <td data-label="매매 이유">{r.tag}</td>
+              <td data-label="건수" className="mono">
+                {r.total}
+              </td>
+              <td data-label="이익으로 끝난 건" className="mono">
+                {r.win}
+              </td>
+              <td
+                data-label="합계 R"
+                className={`mono ${r.sumR >= 0 ? "up" : "down"}`}
+              >
                 {r.sumR.toFixed(2)}R
               </td>
-              <td className="mono">{(r.sumR / r.total).toFixed(2)}R</td>
+              <td data-label="평균 R" className="mono">
+                {(r.sumR / r.total).toFixed(2)}R
+              </td>
             </tr>
           ))}
         </tbody>

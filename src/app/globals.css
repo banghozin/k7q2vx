@@ -1144,7 +1144,449 @@ tbody tr:hover {
   gap: 0.25rem;
 }
 
+/* ── 시세 표시 ───────────────────────────────────────────────────── */
+
+/* 화면에는 안 보이지만 스크린리더는 읽는 텍스트 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.specimen__ticker {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.specimen__quote {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.86rem;
+  margin-top: -0.15rem;
+}
+
+.specimen__price {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.specimen__metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 1rem;
+  margin: 0;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--rule-soft);
+  font-size: 0.72rem;
+}
+
+.specimen__metrics > div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+}
+
+.specimen__metrics dt {
+  color: var(--ink-4);
+}
+
+.specimen__metrics dd {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.tag--leader {
+  color: #16130c;
+  background: var(--brass);
+  border-color: var(--brass);
+  font-weight: 600;
+}
+
+/* 층 머리의 온도 줄 */
+.heatline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.1rem;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.heatline__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+}
+
+.heatline__k {
+  color: var(--ink-4);
+  font-size: 0.68rem;
+}
+
+.heatline b {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* ── 층 온도 지도 ─────────────────────────────────────────────────── */
+
+.heatmap {
+  border: 1px solid var(--rule);
+}
+
+.heatrow {
+  display: grid;
+  grid-template-columns: 2.6rem minmax(6rem, 1fr) minmax(4rem, 2fr) 4rem 3rem;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--rule-soft);
+  text-decoration: none;
+  transition: background 0.15s;
+  font-size: 0.82rem;
+}
+
+.heatrow:last-child {
+  border-bottom: none;
+}
+
+.heatrow:hover {
+  background: var(--panel);
+}
+
+.heatrow__n {
+  color: var(--ink-4);
+  font-size: 0.7rem;
+}
+
+.heatrow__name {
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.heatrow__bar {
+  display: block;
+  height: 6px;
+  background: var(--rule-soft);
+  position: relative;
+}
+
+.heatrow__fill {
+  display: block;
+  height: 100%;
+}
+
+.heatrow__fill.is-up {
+  background: var(--up);
+}
+
+.heatrow__fill.is-down {
+  background: var(--down);
+}
+
+.heatrow__v {
+  text-align: right;
+  font-weight: 600;
+}
+
+.heatrow__up {
+  text-align: right;
+  color: var(--ink-4);
+  font-size: 0.7rem;
+}
+
+/* ── 동조율 ───────────────────────────────────────────────────────── */
+
+.syncbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  align-items: baseline;
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.syncbar__lead {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.syncbar__k {
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  color: var(--ink-4);
+}
+
+.syncbar__ticker {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.syncbar__name {
+  font-size: 0.8rem;
+  color: var(--ink-3);
+}
+
+.syncbar__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.1rem;
+  font-size: 0.75rem;
+  color: var(--ink-3);
+}
+
+.syncbar__facts b {
+  color: var(--ink);
+}
+
+.syncwarn {
+  font-size: 0.8rem;
+  color: var(--ink-2);
+  margin: 0.85rem 0;
+}
+
+.syncwarn strong {
+  color: var(--brass);
+}
+
+.syncnote {
+  font-size: 0.76rem;
+  color: var(--ink-4);
+  margin-top: 0.85rem;
+  max-width: var(--measure);
+  line-height: 1.7;
+}
+
+.syncnote strong {
+  color: var(--ink-3);
+}
+
+.synctable__name {
+  font-size: 0.72rem;
+  color: var(--ink-4);
+  margin-left: 0.4rem;
+}
+
+.synctable__partial {
+  display: inline-block;
+  margin-left: 0.3rem;
+  font-size: 0.6rem;
+  padding: 0 0.25rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  color: var(--ink-4);
+}
+
+.linkish {
+  background: none;
+  border: none;
+  padding: 0;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.linkish:hover {
+  color: var(--accent);
+}
+
+/* ── 홈: 뜨거운 층 ────────────────────────────────────────────────── */
+
+.hotgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1px;
+  background: var(--rule-soft);
+  border: 1px solid var(--rule-soft);
+}
+
+.hotcard {
+  background: var(--panel);
+  padding: 1rem 1.1rem;
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  transition: background 0.15s;
+}
+
+.hotcard:hover {
+  background: var(--panel-2);
+}
+
+.hotcard__theme {
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  color: var(--ink-4);
+}
+
+.hotcard__layer {
+  font-family: var(--font-serif), serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.hotcard__v {
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin-top: 0.2rem;
+}
+
+.hotcard__sub {
+  font-size: 0.72rem;
+  color: var(--ink-4);
+}
+
 /* ── 반응형 ───────────────────────────────────────────────────────── */
+
+/* 태블릿 — 지금까지 모바일/데스크톱 두 갈래뿐이라 아이패드에서 어정쩡했습니다 */
+@media (max-width: 1024px) {
+  .specimens {
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  }
+
+  .heatrow {
+    grid-template-columns: 2.4rem minmax(5rem, 1fr) minmax(3rem, 1.4fr) 3.6rem 2.8rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .specimens {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .themegrid {
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  }
+}
+
+/*
+ * 좁은 화면에서 표를 카드로 바꿉니다.
+ *
+ * 그냥 가로 스크롤을 두면 폰에서 숫자를 보려고 옆으로 밀어야 합니다.
+ * <table> 시맨틱(스크린리더가 읽는 구조)은 그대로 두고 CSS 로만 배치를
+ * 바꿉니다. 각 칸의 제목은 data-label 로 붙여 둔 값을 씁니다.
+ */
+@media (max-width: 720px) {
+  .tablewrap {
+    overflow-x: visible;
+    border: none;
+  }
+
+  .tablewrap table {
+    min-width: 0;
+    display: block;
+  }
+
+  .tablewrap thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .tablewrap tbody {
+    display: block;
+  }
+
+  .tablewrap tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.15rem 0.75rem;
+    padding: 0.75rem 0.85rem;
+    border: 1px solid var(--rule);
+    background: var(--panel);
+    margin-bottom: -1px;
+  }
+
+  .tablewrap td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.1rem 0;
+    border: none;
+    min-width: 0;
+  }
+
+  .tablewrap td::before {
+    content: attr(data-label);
+    color: var(--ink-4);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    flex-shrink: 0;
+  }
+
+  /* data-label 이 없는 칸은 제목 자리를 비워 둡니다 */
+  .tablewrap td:not([data-label])::before {
+    content: none;
+  }
+
+  /* 첫 칸(대개 종목명)은 한 줄 전체를 쓰고 제목을 감춥니다 */
+  .tablewrap td:first-child {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    padding-bottom: 0.3rem;
+    margin-bottom: 0.15rem;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+
+  .tablewrap td:first-child::before {
+    content: none;
+  }
+
+  /* 대장주 표는 첫 칸이 순위라 두 번째 칸(종목)을 대표로 씁니다 */
+  .leadertable td:first-child {
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-bottom: 0;
+    color: var(--ink-4);
+    font-size: 0.7rem;
+  }
+
+  .leadertable td:first-child::before {
+    content: attr(data-label);
+  }
+
+  .leadertable td:nth-child(2) {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    padding-bottom: 0.3rem;
+    margin-bottom: 0.15rem;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+
+  .leadertable td:nth-child(2)::before {
+    content: none;
+  }
+
+  /* 층 목록처럼 태그가 여러 개 들어가는 칸은 아래로 흐르게 */
+  .tablewrap td.cell-wide {
+    grid-column: 1 / -1;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
 
 @media (max-width: 640px) {
   :root {
@@ -1174,6 +1616,57 @@ tbody tr:hover {
   .navlink {
     padding: 0.35rem 0.5rem;
     font-size: 0.8rem;
+  }
+
+  /* 손가락으로 누를 수 있는 크기 확보 — 28px 은 너무 작습니다 */
+  .star {
+    width: 2.75rem;
+    height: 2.75rem;
+    top: 0.15rem;
+    right: 0.15rem;
+  }
+
+  .tag {
+    padding: 0.25rem 0.45rem;
+    font-size: 0.66rem;
+  }
+
+  .rail__item {
+    padding: 0.7rem 0.85rem;
+  }
+
+  /* 층 온도 지도 — 좁으면 상승 종목 수는 감춥니다 */
+  .heatrow {
+    grid-template-columns: 2.2rem minmax(4.5rem, 1fr) minmax(2.5rem, 1fr) 3.4rem;
+    padding: 0.6rem 0.6rem;
+  }
+
+  .heatrow__up {
+    display: none;
+  }
+
+  .hero__title {
+    max-width: none;
+  }
+}
+
+/*
+ * body 에 overflow-x: hidden 을 걸면 가로 스크롤은 사라지지만
+ * position: sticky 인 상단 바와 층 번호가 같이 죽습니다.
+ * 그래서 덮지 않고, 넘치는 원인을 각 요소에서 직접 없앴습니다.
+ */
+
+/* 인쇄 시 도면처럼 */
+@media print {
+  .masthead,
+  .rail,
+  .star,
+  .foot {
+    display: none;
+  }
+  body {
+    background: #fff;
+    color: #000;
   }
 }
 

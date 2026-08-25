@@ -82,6 +82,74 @@ export default function AboutPage() {
         </div>
       </section>
 
+      <section className="section" id="how">
+        <h2 className="section__title">숫자를 어떻게 계산하나</h2>
+
+        <h3 style={{ fontSize: "1.05rem", margin: "1.5rem 0 0.5rem" }}>
+          층별 온도
+        </h3>
+        <p style={{ maxWidth: "var(--measure)", color: "var(--ink-2)" }}>
+          층에 속한 종목들 등락률의 <strong>중앙값</strong>입니다. 평균이 아니라
+          중앙값을 쓰는 이유는, 한 종목이 30% 튀었다고 층 전체가 뜨거워 보이면
+          안 되기 때문입니다. 배당과 액면분할이 반영된 수정 종가로 계산합니다.
+        </p>
+
+        <h3 style={{ fontSize: "1.05rem", margin: "1.5rem 0 0.5rem" }}>
+          동조율
+        </h3>
+        <p style={{ maxWidth: "var(--measure)", color: "var(--ink-2)" }}>
+          기준 종목이 하루에 <strong>+3% 이상 오른 날</strong>만 최근 1년에서
+          뽑고, 그날 각 종목이 올랐는지 셉니다. 사건이 10회가 안 되면 기준을
+          +2%, +1.5%로 낮추며, <strong>실제로 쓴 기준과 사건 수를 화면에 그대로
+          적습니다.</strong> 상장이 늦어 사건일 전체를 겪지 못한 종목은
+          겪은 날만 분모로 쓰고 &lsquo;부분&rsquo;으로 표시합니다 — 분모가 다른 비율을
+          나란히 놓고 비교하면 안 되기 때문입니다.
+        </p>
+        <p style={{ maxWidth: "var(--measure)", color: "var(--ink-2)" }}>
+          <strong>이 숫자는 지나간 기록입니다.</strong> 앞으로도 같이 움직인다는
+          보장이 아니고, 한쪽이 다른 쪽을 움직였다는 인과관계의 증거도 아닙니다.
+        </p>
+
+        <h3 style={{ fontSize: "1.05rem", margin: "1.5rem 0 0.5rem" }}>
+          무엇이 테마를 끄는가 (대장주)
+        </h3>
+        <p style={{ maxWidth: "var(--measure)", color: "var(--ink-2)" }}>
+          네 가지를 테마 안 순위로 환산해 합산합니다 — 주도력 45%, 선행성 25%,
+          상대강도 15%, 자금유입 15%.
+        </p>
+        <ul style={{ maxWidth: "var(--measure)", color: "var(--ink-2)" }}>
+          <li>
+            <strong>주도력</strong> — 이 종목이 크게 오른 상위 30일에 나머지
+            종목들도 같이 올랐는지. 평상시 비율을 뺀 초과분입니다.
+          </li>
+          <li>
+            <strong>선행성</strong> — 먼저 움직인 정도에서 따라간 정도를 뺀 값.
+            양수면 앞서 움직였다는 뜻입니다.
+          </li>
+          <li>
+            <strong>상대강도</strong> — 60일 수익률에서 테마 중앙값을 뺀 값.
+          </li>
+          <li>
+            <strong>자금유입</strong> — 20일 평균 거래대금 ÷ 60일 평균 거래대금.
+            절대 규모가 아니라 <em>최근에 늘었는가</em>를 봅니다.
+          </li>
+        </ul>
+        <p style={{ maxWidth: "var(--measure)", color: "var(--ink-2)" }}>
+          계산에 앞서 <strong>시장 전체 흐름(S&amp;P500)의 영향을 걷어냅니다.</strong>{" "}
+          그러지 않으면 시장이 오르는 날에만 오르는 저변동 종목이 &ldquo;나머지를 끌고
+          간다&rdquo;고 잘못 집계됩니다. 또 회사 매출에서 이 테마가 차지하는 비중이
+          작은 종목(예: 양자컴퓨팅에서의 대형 IT)은 대장 후보에서 뺍니다 — 테마와
+          무관한 실적이 순위를 정해 버리기 때문입니다. 그런 종목도 층에는 그대로
+          남고 동조율 구성원으로도 셉니다.
+        </p>
+        <p style={{ maxWidth: "var(--measure)", color: "var(--ink-2)" }}>
+          1위와 2위 점수가 거의 붙어 있으면 <strong>&lsquo;접전&rsquo;으로 표시하고 한 종목을
+          대장이라 단정하지 않습니다.</strong> 손바뀜은 약 3개월 전과 비교해
+          예전 1위가 3위 밖으로 밀려났을 때만 표시합니다 — 짧은 기간으로 보면
+          순위가 수시로 뒤집혀 잡음이 됩니다.
+        </p>
+      </section>
+
       <section className="section">
         <h2 className="section__title">데이터와 갱신</h2>
         <div className="tablewrap">
@@ -94,21 +162,23 @@ export default function AboutPage() {
             </thead>
             <tbody>
               <tr>
-                <td>테마–종목 배치</td>
-                <td>
+                <td data-label="항목">테마–종목 배치</td>
+                <td data-label="출처와 방식">
                   직접 큐레이션. 각 테마 화면 상단에 마지막으로 손본 날짜가
                   적혀 있습니다.
                 </td>
               </tr>
               <tr>
-                <td>일봉 시세</td>
-                <td>
-                  Yahoo Finance. 차트를 열 때 조회하며 지연될 수 있습니다.
+                <td data-label="항목">일봉 시세</td>
+                <td data-label="출처와 방식">
+                  Yahoo Finance 수정 종가. 원래는 stooq 의 공개 CSV 를 쓰려고
+                  했으나 2026년 8월 현재 stooq 가 자동 수집을 차단해 전환했습니다.
+                  하루 1회 계산하며, 차트를 열 때는 그 자리에서 따로 조회합니다.
                 </td>
               </tr>
               <tr>
-                <td>뉴스</td>
-                <td>
+                <td data-label="항목">뉴스</td>
+                <td data-label="출처와 방식">
                   <a href={SBH.dataUseUrl} target="_blank" rel="noreferrer">
                     {SBH.source}
                   </a>{" "}
@@ -121,16 +191,18 @@ export default function AboutPage() {
                 </td>
               </tr>
               <tr>
-                <td>워치리스트 · 매매노트</td>
-                <td>
+                <td data-label="항목">워치리스트 · 매매노트</td>
+                <td data-label="출처와 방식">
                   이용자의 브라우저(localStorage)에만 저장됩니다. 서버로
                   전송되지 않습니다.
                 </td>
               </tr>
               <tr>
-                <td>갱신 주기</td>
-                <td>
-                  하루 1회. 실시간이 아니라는 점은 의도된 선택입니다.
+                <td data-label="항목">갱신 주기</td>
+                <td data-label="출처와 방식">
+                  평일 미국장 마감 후 하루 1회. 실시간이 아니라는 점은 의도된
+                  선택입니다. 갱신 전에 모든 종목이 아직 상장돼 있는지 자동으로
+                  확인하며, 하나라도 사라졌으면 갱신을 멈추고 알립니다.
                 </td>
               </tr>
             </tbody>
@@ -141,9 +213,9 @@ export default function AboutPage() {
       <section className="section" style={{ borderBottom: "none" }}>
         <h2 className="section__title">아직 없는 것</h2>
         <p style={{ maxWidth: "var(--measure)", color: "var(--ink-2)" }}>
-          층별 온도(5일·20일 성과), 동조율, 대장주 판별, 매일 한 줄 브리핑은
-          아직 붙지 않았습니다. 지금은 층 구조와 배치 근거를 먼저 세우는
-          단계입니다. <Link href="/">테마 목록으로</Link>
+          매일 한 줄 브리핑(&ldquo;오늘 AI 체인에서 가장 뜨거웠던 층은 광통신&rdquo; 같은
+          자동 요약)은 아직 없습니다. 층 안에서의 순환을 시간축으로 보여주는
+          화면도 없습니다. <Link href="/">테마 목록으로</Link>
         </p>
       </section>
     </div>

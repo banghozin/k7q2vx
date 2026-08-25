@@ -4,7 +4,17 @@ import { THEMES, getTheme, layersTopDown } from "@/data/themes";
 import { Strata } from "@/components/strata";
 import { NewsList } from "@/components/news-list";
 import { ShareLayerLink } from "@/components/share-layer-link";
+import { LayerHeatMap } from "@/components/layer-heat";
+import { SyncTable } from "@/components/sync-table";
+import { LeaderPanel } from "@/components/leader-panel";
 import { fetchNews, matchTheme } from "@/lib/sbhnews";
+import {
+  asOf,
+  getLayerHeat,
+  getLeaders,
+  getSync,
+  hasMarketData,
+} from "@/lib/market-data";
 
 export const revalidate = 21600; // 6시간
 
@@ -38,6 +48,10 @@ export default async function ThemePage({
   const layers = layersTopDown(theme);
   const stockCount = theme.layers.reduce((a, l) => a + l.stocks.length, 0);
 
+  const heat = getLayerHeat(theme.slug);
+  const sync = getSync(theme.slug);
+  const leaders = getLeaders(theme.slug);
+
   const news = matchTheme(await fetchNews(), theme.newsKeywords, 6);
 
   return (
@@ -51,6 +65,7 @@ export default async function ThemePage({
             <span>{theme.layers.length}개 층</span>
             <span>{stockCount}종목</span>
             <span>큐레이션 {theme.curatedAt}</span>
+            {asOf && <span>시세 기준 {asOf}</span>}
             <span>갱신 하루 1회</span>
           </div>
         </header>
@@ -62,8 +77,21 @@ export default async function ThemePage({
           설계입니다. 각 종목 아래 한 줄은 <strong>왜 그 층에 있는지</strong>를
           밝힌 것이지 매수·매도 의견이 아닙니다. 카드를 누르면 일봉 차트가
           열리고, 회색 태그는 그 종목이 <strong>다른 테마에도 걸쳐 있다</strong>
-          는 표시입니다.
+          는 표시입니다. 등락은 <span className="up">빨강이 상승</span>,{" "}
+          <span className="down">파랑이 하락</span>입니다.
         </div>
+
+        {heat.length > 0 && (
+          <section className="section" id="heat">
+            <h2 className="section__title">지금 어느 층이 뜨거운가</h2>
+            <p className="section__sub">
+              층에 속한 종목들 20일 등락률의 <strong>중앙값</strong>입니다. 한
+              종목이 크게 튀어도 층 전체가 왜곡되지 않도록 평균 대신 중앙값을
+              씁니다. 막대를 누르면 그 층으로 내려갑니다.
+            </p>
+            <LayerHeatMap themeSlug={theme.slug} layers={heat} />
+          </section>
+        )}
 
         <ShareLayerLink layers={theme.layers} />
       </div>
@@ -71,6 +99,41 @@ export default async function ThemePage({
       <div className="wrap">
         <Strata layers={layers} themeSlug={theme.slug} />
       </div>
+
+      {sync && sync.events > 0 && (
+        <div className="wrap">
+          <section className="section" id="sync">
+            <h2 className="section__title">동조율 — 누가 같이 움직였나</h2>
+            <p className="section__sub">
+              기준 종목이 크게 오른 날만 골라, 그날 각 종목이 어떻게 반응했는지
+              센 것입니다. &ldquo;관련주&rdquo;라는 말 대신 숫자로 답하려는 장치입니다.
+            </p>
+            <SyncTable themeSlug={theme.slug} sync={sync} />
+          </section>
+        </div>
+      )}
+
+      {leaders && leaders.ranked.length > 0 && (
+        <div className="wrap">
+          <section className="section" id="leader">
+            <h2 className="section__title">무엇이 이 테마를 끌고 있나</h2>
+            <p className="section__sub">
+              시가총액 1위가 아니라 <strong>먼저 반응하고, 더 크게 가고,
+              나머지를 끌고 가는</strong> 종목을 찾는 계산입니다. 근거를
+              감추지 않고 재료를 그대로 펼쳐 둡니다.
+            </p>
+            <LeaderPanel themeSlug={theme.slug} leaders={leaders} />
+          </section>
+        </div>
+      )}
+
+      {!hasMarketData && (
+        <div className="wrap">
+          <div className="empty" style={{ margin: "2rem 0" }}>
+            시세 데이터가 아직 계산되지 않았습니다. 층 구조와 배치만 표시됩니다.
+          </div>
+        </div>
+      )}
 
       <div className="wrap">
         <section className="section" id="news">

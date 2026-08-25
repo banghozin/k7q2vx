@@ -16,25 +16,21 @@ export function CrossTicker({
 
   return (
     <tr>
-      <td>
+      <td data-label="티커">
         <button
           type="button"
-          className="mono"
+          className="linkish mono"
           onClick={() => open(ticker, name)}
-          style={{
-            background: "none",
-            border: "none",
-            padding: 0,
-            cursor: "pointer",
-            fontWeight: 600,
-            fontSize: ".9rem",
-          }}
+          style={{ fontSize: ".95rem" }}
         >
           {ticker}
         </button>
+        <span className="synctable__name">{name}</span>
       </td>
-      <td style={{ color: "var(--ink-3)" }}>{name}</td>
-      <td>
+      <td data-label="회사" style={{ color: "var(--ink-3)" }}>
+        {name}
+      </td>
+      <td data-label="걸쳐 있는 층" className="cell-wide">
         <div style={{ display: "flex", flexWrap: "wrap", gap: ".3rem" }}>
           {places.map((p) => (
             <Link

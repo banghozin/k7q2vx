@@ -1,0 +1,92 @@
+name: 시세 갱신
+
+# 미국장 마감(동부 16:00 = UTC 20:00 또는 21:00) 이후에 돕니다.
+# 서머타임 때문에 마감 시각이 UTC 기준으로 한 시간 움직이므로, 넉넉하게
+# UTC 22:17 로 잡습니다. 두 경우 모두 마감 뒤입니다.
+#
+# 분을 :17 로 둔 이유: 깃허브는 :00 :15 :30 :45 처럼 붐비는 시각의 예약 실행을
+# 부하가 걸리면 뒤로 미루거나 건너뜁니다. 어중간한 분이 밀릴 확률이 낮습니다.
+# 예약 실행은 어차피 최대 30분쯤 늦어질 수 있는 best-effort 입니다.
+on:
+  schedule:
+    - cron: "17 22 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write # 계산 결과를 저장소에 커밋하기 위해
+  issues: write # 실패했을 때 이슈로 알리기 위해
+
+concurrency:
+  group: update-prices
+  # 실행 중인 것을 죽이지 않고 줄을 세웁니다. 중간에 끊기면 반쪽짜리
+  # JSON 이 커밋될 수 있습니다.
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: 시작 기록
+        run: |
+          echo "트리거: ${{ github.event_name }}"
+          echo "시각:   $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      # 티커가 죽었으면 조용히 넘어가면 안 됩니다.
+      # 여기서 실패하면 아래 단계가 아예 돌지 않고, 이슈로 알림이 갑니다.
+      - name: 티커 생존 검사
+        run: npm run validate
+
+      - name: 시세 수집
+        run: npm run fetch
+
+      - name: 지표 계산
+        run: npm run compute
+
+      - name: 바뀐 것만 커밋
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/data/generated/
+          if git diff --staged --quiet; then
+            echo "바뀐 데이터가 없어 커밋하지 않습니다 (휴장일 등)"
+            exit 0
+          fi
+          git commit -m "chore(data): 시세 갱신 $(date -u +'%Y-%m-%d')"
+          # 동시에 다른 실행이 push 하는 경우를 대비해 재시도합니다
+          for attempt in 1 2 3 4 5; do
+            if git push; then
+              echo "push 성공 (${attempt}번째 시도)"
+              exit 0
+            fi
+            echo "push 실패 — pull --rebase 후 재시도"
+            git pull --rebase origin main || exit 1
+          done
+          echo "5번 시도했지만 push 하지 못했습니다"
+          exit 1
+
+      # 실패할 때마다 새 이슈를 만들면 알림이 쌓여 아무도 안 보게 됩니다.
+      # 열린 이슈가 있으면 코멘트만 답니다.
+      - name: 실패 알림
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="시세 갱신 실패"
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          open=$(gh issue list --search "$title in:title state:open" --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body "$(date -u +'%Y-%m-%d %H:%M UTC') 에 또 실패했습니다 — $run_url"
+          else
+            gh issue create --title "$title" --body "$(printf '자동 시세 갱신이 실패했습니다.\n\n로그: %s\n\n흔한 원인:\n- 큐레이션한 종목이 상장폐지되거나 티커가 바뀜 (티커 생존 검사에서 멈춤)\n- Yahoo 가 일시적으로 요청을 막음\n' "$run_url")"
+          fi

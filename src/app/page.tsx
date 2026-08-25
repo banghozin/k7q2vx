@@ -1,6 +1,14 @@
 import Link from "next/link";
-import { THEMES, multiThemeStocks } from "@/data/themes";
+import { THEMES, getTheme, multiThemeStocks } from "@/data/themes";
 import { CrossTicker } from "@/components/cross-ticker";
+import {
+  asOf,
+  coldestLayers,
+  handovers,
+  hottestLayers,
+  pct,
+  tone,
+} from "@/lib/market-data";
 
 export default function Home() {
   const totalStocks = THEMES.reduce(
@@ -9,6 +17,9 @@ export default function Home() {
   );
   const totalLayers = THEMES.reduce((a, t) => a + t.layers.length, 0);
   const overlap = multiThemeStocks().slice(0, 12);
+  const hot = hottestLayers(3);
+  const cold = coldestLayers(3);
+  const moves = handovers();
 
   return (
     <>
@@ -31,10 +42,101 @@ export default function Home() {
             <span>{THEMES.length}개 테마</span>
             <span>{totalLayers}개 층</span>
             <span>{totalStocks}개 배치</span>
+            {asOf && <span>시세 기준 {asOf}</span>}
             <span>매수·매도 의견 없음</span>
           </div>
         </section>
       </div>
+
+      {hot.length > 0 && (
+        <div className="wrap">
+          <section className="section">
+            <h2 className="section__title">지금 가장 뜨거운 층</h2>
+            <p className="section__sub">
+              11개 테마의 {totalLayers}개 층을 가로질러 최근 20일 성과가 가장 높은
+              곳과 낮은 곳입니다. 층에 속한 종목 등락률의 중앙값 기준이며,{" "}
+              <strong>지나간 기록입니다.</strong>
+            </p>
+            <div className="hotgrid">
+              {hot.map(({ slug, layer }) => (
+                <Link
+                  key={`${slug}-${layer.key}`}
+                  href={`/theme/${slug}#layer-${layer.n}`}
+                  className="hotcard"
+                >
+                  <span className="hotcard__theme">
+                    {getTheme(slug)?.name} · {layer.n}층
+                  </span>
+                  <span className="hotcard__layer">{layer.name}</span>
+                  <span className={`hotcard__v mono ${tone(layer.ret20)}`}>
+                    {pct(layer.ret20)}
+                  </span>
+                  <span className="hotcard__sub mono">
+                    20일 중앙값 · {layer.up}/{layer.total}종목 상승
+                  </span>
+                </Link>
+              ))}
+            </div>
+
+            <h3
+              className="section__title"
+              style={{ fontSize: "1.05rem", margin: "2rem 0 0.5rem" }}
+            >
+              가장 식은 층
+            </h3>
+            <div className="hotgrid">
+              {cold.map(({ slug, layer }) => (
+                <Link
+                  key={`${slug}-${layer.key}`}
+                  href={`/theme/${slug}#layer-${layer.n}`}
+                  className="hotcard"
+                >
+                  <span className="hotcard__theme">
+                    {getTheme(slug)?.name} · {layer.n}층
+                  </span>
+                  <span className="hotcard__layer">{layer.name}</span>
+                  <span className={`hotcard__v mono ${tone(layer.ret20)}`}>
+                    {pct(layer.ret20)}
+                  </span>
+                  <span className="hotcard__sub mono">
+                    20일 중앙값 · {layer.up}/{layer.total}종목 상승
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {moves.length > 0 && (
+        <div className="wrap">
+          <section className="section">
+            <h2 className="section__title">앞서던 종목이 바뀐 테마</h2>
+            <p className="section__sub">
+              약 3개월 전 기준으로 테마를 끌던 종목과 지금 끄는 종목이 달라진
+              곳입니다. <strong>순위가 바뀌었다는 사실만</strong> 적은 것이며,
+              어느 쪽을 사라는 뜻이 아닙니다.
+            </p>
+            <div className="hotgrid">
+              {moves.map((m) => (
+                <Link
+                  key={m.slug}
+                  href={`/theme/${m.slug}#leader`}
+                  className="hotcard"
+                >
+                  <span className="hotcard__theme">{getTheme(m.slug)?.name}</span>
+                  <span className="hotcard__layer mono">
+                    {m.from} → {m.to}
+                  </span>
+                  <span className="hotcard__sub">
+                    {m.agoDays}거래일 전과 비교
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
 
       <div className="wrap">
         <section className="section">
