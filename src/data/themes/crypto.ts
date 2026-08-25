@@ -126,9 +126,9 @@ export const crypto: Theme = {
           why: "코인 운용·중개와 데이터센터 사업을 겸합니다. AI 쪽 소식에도 반응합니다.",
         },
         {
-          ticker: "SMLR",
-          name: "셈러 사이언티픽",
-          why: "의료기기 회사이면서 코인을 대량 보유. 본업과 주가 동인이 어긋나 있습니다.",
+          ticker: "ASST",
+          name: "스트라이브",
+          why: "코인을 대량 보유한 자산운용사. 의료기기 회사였던 셈러를 합병해 지금 형태가 됐습니다.",
         },
       ],
     },
@@ -145,7 +145,7 @@ export const crypto: Theme = {
           anchor: true,
         },
         {
-          ticker: "BK",
+          ticker: "BNY",
           name: "뱅크 오브 뉴욕 멜론",
           why: "디지털자산 수탁 서비스. 은행 규제 완화 여부에 사업 확장이 달려 있습니다.",
         },

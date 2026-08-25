@@ -67,6 +67,8 @@ export const security: Theme = {
       key: "identity",
       name: "신원·접근 관리",
       role: "누가 무엇에 접근할 수 있는지를 통제하는 층. 요즘 침해의 대부분이 여기서 뚫립니다.",
+      caution:
+        "이 층은 인수합병이 잦습니다. 사이버아크가 팔로알토(1층)에 인수되면서 상장이 사라진 것처럼, 개별 종목이 통째로 없어질 수 있습니다.",
       stocks: [
         {
           ticker: "OKTA",
@@ -75,9 +77,9 @@ export const security: Theme = {
           anchor: true,
         },
         {
-          ticker: "CYBR",
-          name: "사이버아크 소프트웨어",
-          why: "관리자 권한처럼 위험도 높은 계정을 따로 통제. 규제 대응 수요가 큽니다.",
+          ticker: "SAIL",
+          name: "세일포인트",
+          why: "누가 무엇에 접근할 권한을 갖는지 관리·감사하는 쪽. 규제 대응 수요가 큽니다.",
         },
       ],
     },
