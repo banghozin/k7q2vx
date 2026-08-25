@@ -1308,6 +1308,32 @@ tbody tr:hover {
 
 /* ── 동조율 ───────────────────────────────────────────────────────── */
 
+.syncpick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.syncpick__k {
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  color: var(--ink-4);
+}
+
+.syncpick .segmented button {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.78rem;
+}
+
+.syncpick__auto {
+  color: var(--accent);
+  font-size: 0.5rem;
+  vertical-align: super;
+  margin-left: 0.15rem;
+}
+
 .syncbar {
   display: flex;
   flex-wrap: wrap;

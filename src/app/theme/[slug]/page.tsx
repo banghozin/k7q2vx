@@ -111,7 +111,7 @@ export default async function ThemePage({
         <Strata layers={layers} themeSlug={theme.slug} />
       </div>
 
-      {sync && sync.events > 0 && (
+      {sync && sync.candidates.length > 0 && (
         <div className="wrap">
           <section className="section" id="sync">
             <h2 className="section__title">동조율 — 누가 같이 움직였나</h2>

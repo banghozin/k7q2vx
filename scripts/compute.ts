@@ -586,28 +586,20 @@ async function main() {
     partial: boolean;
   };
 
-  const sync: Record<
-    string,
-    {
-      leader: string;
-      threshold: number;
-      events: number;
-      window: number;
-      leaderAvg: number | null;
-      members: SyncMember[];
-      note: string;
-    }
-  > = {};
+  type OneSync = {
+    leader: string;
+    threshold: number;
+    events: number;
+    window: number;
+    leaderAvg: number | null;
+    members: SyncMember[];
+  };
 
-  for (const theme of THEMES) {
-    const tickers = theme.layers.flatMap((l) => l.stocks.map((s) => s.ticker));
-    const ranked = leaders[theme.slug]?.ranked ?? [];
-    const leader =
-      ranked.find((r) => !r.peripheral)?.ticker ?? ranked[0]?.ticker ?? tickers[0];
+  /** 기준 종목 하나에 대해 동조율을 계산합니다. */
+  function syncFor(leader: string, tickers: string[]): OneSync | null {
     const leaderDaily = dailyByTicker.get(leader);
-    if (!leaderDaily) continue;
+    if (!leaderDaily) return null;
 
-    // 최근 252거래일
     const dates = calendar().slice(-252);
 
     let threshold = THRESHOLDS[0];
@@ -617,10 +609,9 @@ async function main() {
       threshold = th;
       if (eventDates.length >= MIN_EVENTS) break;
     }
+    if (eventDates.length === 0) return null;
 
-    const leaderAvg = mean(
-      eventDates.map((d) => leaderDaily.get(d) as number),
-    );
+    const leaderAvg = mean(eventDates.map((d) => leaderDaily.get(d) as number));
 
     const members: SyncMember[] = tickers
       .filter((t) => t !== leader)
@@ -648,14 +639,58 @@ async function main() {
       })
       .sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1));
 
-    sync[theme.slug] = {
+    return {
       leader,
       threshold,
       events: eventDates.length,
       window: dates.length,
       leaderAvg,
       members,
-      note: "대장주가 크게 오른 날만 골라 각 종목이 어떻게 반응했는지 센 것입니다. 과거 기록이며 앞으로도 그러리라는 뜻이 아닙니다.",
+    };
+  }
+
+  const sync: Record<
+    string,
+    {
+      default: string;
+      candidates: string[];
+      byLeader: Record<string, OneSync>;
+      note: string;
+    }
+  > = {};
+
+  for (const theme of THEMES) {
+    const tickers = theme.layers.flatMap((l) => l.stocks.map((s) => s.ticker));
+    const ranked = leaders[theme.slug]?.ranked ?? [];
+    const pure = ranked.filter((r) => !r.peripheral);
+    const fallback = pure[0]?.ticker ?? ranked[0]?.ticker ?? tickers[0];
+
+    /**
+     * 기준 종목 후보를 여러 개 둡니다.
+     *
+     * 계산으로 뽑은 대장이 기본값이지만, 사람들은 "NVDA 기준으로 보면?" 을
+     * 당연히 궁금해합니다. 그래서 상위 3개에 더해 **그 테마에서 거래대금이
+     * 가장 큰 종목**(대개 사람들이 아는 이름)을 후보에 넣습니다.
+     */
+    const byScore = pure.slice(0, 3).map((r) => r.ticker);
+    const biggest = [...tickers]
+      .filter((t) => stocks[t]?.dollarVol != null)
+      .sort((a, b) => (stocks[b].dollarVol ?? 0) - (stocks[a].dollarVol ?? 0))[0];
+
+    const candidates = [...new Set([...byScore, biggest].filter(Boolean))];
+
+    const byLeader: Record<string, OneSync> = {};
+    for (const c of candidates) {
+      const s = syncFor(c, tickers);
+      if (s) byLeader[c] = s;
+    }
+    if (Object.keys(byLeader).length === 0) continue;
+
+    sync[theme.slug] = {
+      default: byLeader[fallback] ? fallback : Object.keys(byLeader)[0],
+      candidates: Object.keys(byLeader),
+      byLeader,
+      note: "기준 종목이 크게 오른 날만 골라 각 종목이 어떻게 반응했는지 센 것입니다. 과거 기록이며 앞으로도 그러리라는 뜻이 아닙니다.",
     };
   }
 
@@ -792,22 +827,28 @@ async function main() {
   /* ── 요약 출력 ───────────────────────────────────────────────── */
 
   console.log(`\n[compute] 기준일 ${asOf} · 종목 ${Object.keys(stocks).length}개`);
-  const short = Object.entries(sync).filter(([, v]) => v.events < MIN_EVENTS);
+  const short = Object.entries(sync).filter(
+    ([, v]) => v.byLeader[v.default].events < MIN_EVENTS,
+  );
   if (short.length) {
     console.warn(
       `[compute] 사건 수가 ${MIN_EVENTS}회 미만인 테마: ` +
-        short.map(([k, v]) => `${k}(${v.events}회)`).join(", "),
+        short
+          .map(([k, v]) => `${k}(${v.byLeader[v.default].events}회)`)
+          .join(", "),
     );
   }
   for (const theme of THEMES) {
     const s = sync[theme.slug];
     const h = leaders[theme.slug]?.handover;
     if (!s) continue;
+    const d = s.byLeader[s.default];
     const L = leaders[theme.slug];
     console.log(
-      `  ${theme.name.padEnd(12)} 대장 ${s.leader.padEnd(6)} ` +
-        `+${s.threshold}% ${String(s.events).padStart(3)}회` +
+      `  ${theme.name.padEnd(12)} 대장 ${d.leader.padEnd(6)} ` +
+        `+${d.threshold}% ${String(d.events).padStart(3)}회` +
         (L?.close ? "  (접전)" : "") +
+        `  기준 후보 ${s.candidates.join("·")}` +
         (h ? `  ← 손바뀜 ${h.from}→${h.to}` : ""),
     );
   }

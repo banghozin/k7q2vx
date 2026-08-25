@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { ThemeSync } from "@/lib/market-data";
+import { josa } from "@/lib/format";
 import { pct, tone } from "@/lib/format";
 import { placementsOf } from "@/data/themes";
 import { useChartModal } from "@/lib/store/chart-modal-store";
@@ -26,13 +27,16 @@ export function SyncTable({
 }) {
   const open = useChartModal((s) => s.open);
   const [showAll, setShowAll] = useState(false);
+  const [leader, setLeader] = useState(sync.default);
+
+  const view = sync.byLeader[leader] ?? sync.byLeader[sync.default];
 
   const rows = useMemo(() => {
-    const withData = sync.members.filter((m) => m.events > 0);
+    const withData = view.members.filter((m) => m.events > 0);
     return showAll ? withData : withData.slice(0, 10);
-  }, [sync.members, showAll]);
+  }, [view.members, showAll]);
 
-  const hidden = sync.members.filter((m) => m.events > 0).length - rows.length;
+  const hidden = view.members.filter((m) => m.events > 0).length - rows.length;
   const nameOf = (t: string) => placementsOf(t)[0]?.stock.name ?? t;
   const layerOf = (t: string) => {
     const p = placementsOf(t).find((x) => x.themeSlug === themeSlug);
@@ -41,28 +45,56 @@ export function SyncTable({
 
   return (
     <>
+      {sync.candidates.length > 1 && (
+        <div className="syncpick">
+          <span className="syncpick__k">기준 종목 바꾸기</span>
+          <div className="segmented">
+            {sync.candidates.map((c) => (
+              <button
+                key={c}
+                type="button"
+                className="mono"
+                aria-pressed={leader === c}
+                onClick={() => {
+                  setLeader(c);
+                  setShowAll(false);
+                }}
+                title={nameOf(c)}
+              >
+                {c}
+                {c === sync.default && (
+                  <span className="syncpick__auto" aria-label="계산으로 뽑은 값">
+                    ●
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="syncbar">
         <div className="syncbar__lead">
           <span className="syncbar__k">기준 종목</span>
           <button
             type="button"
             className="mono syncbar__ticker"
-            onClick={() => open(sync.leader, nameOf(sync.leader))}
+            onClick={() => open(view.leader, nameOf(view.leader))}
           >
-            {sync.leader}
+            {view.leader}
           </button>
-          <span className="syncbar__name">{nameOf(sync.leader)}</span>
+          <span className="syncbar__name">{nameOf(view.leader)}</span>
         </div>
         <div className="syncbar__facts mono">
           <span>
-            하루 <b>+{sync.threshold}%</b> 이상 오른 날
+            하루 <b>+{view.threshold}%</b> 이상 오른 날
           </span>
           <span>
-            최근 1년 <b>{sync.events}회</b>
+            최근 1년 <b>{view.events}회</b>
           </span>
-          {sync.leaderAvg != null && (
+          {view.leaderAvg != null && (
             <span>
-              그날 평균 <b className="up">{pct(sync.leaderAvg)}</b>
+              그날 평균 <b className="up">{pct(view.leaderAvg)}</b>
             </span>
           )}
         </div>
@@ -76,7 +108,8 @@ export function SyncTable({
       <div className="tablewrap">
         <table className="synctable">
           <caption className="sr-only">
-            {sync.leader}가 크게 오른 날 각 종목의 반응
+            {view.leader}
+            {josa(view.leader, "이/가")} 크게 오른 날 각 종목의 반응
           </caption>
           <thead>
             <tr>
@@ -109,7 +142,7 @@ export function SyncTable({
                   {m.partial && (
                     <span
                       className="synctable__partial"
-                      title={`상장이 늦어 ${sync.events}회 중 ${m.events}회만 겪었습니다`}
+                      title={`상장이 늦어 ${view.events}회 중 ${m.events}회만 겪었습니다`}
                     >
                       부분
                     </span>
@@ -146,7 +179,9 @@ export function SyncTable({
         이 종목도 오른 날 수입니다. &ldquo;반응 배수&rdquo;는 기준 종목이 오른 폭 대비 이
         종목이 오른 폭입니다. 1배보다 크면 더 크게 움직였다는 뜻입니다.{" "}
         <span className="synctable__partial">부분</span> 표시는 상장이 늦어 전체
-        기간을 겪지 못한 종목입니다 — 분모가 다르므로 비율을 그대로 비교하면 안 됩니다.{" "}
+        기간을 겪지 못한 종목입니다 — 분모가 다르므로 비율을 그대로 비교하면 안 됩니다.
+        기준 종목 옆의 <span className="syncpick__auto">●</span> 은 계산으로 뽑은
+        값이라는 표시이고, 나머지는 직접 골라 본 것입니다.{" "}
         <Link href="/about">계산 방식 자세히</Link>
       </p>
     </>

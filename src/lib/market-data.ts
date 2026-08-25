@@ -52,13 +52,24 @@ export type SyncMember = {
   partial: boolean;
 };
 
-export type ThemeSync = {
+/** 기준 종목 하나에 대한 동조율 */
+export type OneSync = {
   leader: string;
   threshold: number;
   events: number;
   window: number;
   leaderAvg: number | null;
   members: SyncMember[];
+};
+
+/**
+ * 한 테마의 동조율. 기준 종목을 여러 개 미리 계산해 두어
+ * 화면에서 "NVDA 기준으로 보면?" 같은 질문에 바로 답할 수 있게 합니다.
+ */
+export type ThemeSync = {
+  default: string;
+  candidates: string[];
+  byLeader: Record<string, OneSync>;
   note: string;
 };
 

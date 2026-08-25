@@ -109,6 +109,13 @@ export default function AboutPage() {
           <strong>이 숫자는 지나간 기록입니다.</strong> 앞으로도 같이 움직인다는
           보장이 아니고, 한쪽이 다른 쪽을 움직였다는 인과관계의 증거도 아닙니다.
         </p>
+        <p style={{ maxWidth: "var(--measure)", color: "var(--ink-2)" }}>
+          기준 종목은 아래 &lsquo;대장주&rsquo; 계산으로 뽑은 값이 기본이지만,{" "}
+          <strong>화면에서 다른 종목으로 바꿔 볼 수 있습니다.</strong> 상위
+          후보 세 개에 더해 그 테마에서 거래대금이 가장 큰 종목(대개 사람들이
+          아는 이름)을 후보에 넣어 뒀습니다. &ldquo;엔비디아 기준으로 보면 어떤가&rdquo;
+          같은 질문에 바로 답하기 위해서입니다.
+        </p>
 
         <h3 style={{ fontSize: "1.05rem", margin: "1.5rem 0 0.5rem" }}>
           무엇이 테마를 끄는가 (대장주)
