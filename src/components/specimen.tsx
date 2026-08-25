@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { Stock } from "@/data/types";
 import { crossTagsOf } from "@/data/themes";
 import type { StockMetrics } from "@/lib/market-data";
-import { pct, tone } from "@/lib/market-data";
+import { pct, tone } from "@/lib/format";
 import { useChartModal } from "@/lib/store/chart-modal-store";
 import { StarButton } from "./star-button";
 

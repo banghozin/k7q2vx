@@ -176,24 +176,6 @@ export function coldestLayers(limit = 3): {
   return all.slice(0, limit);
 }
 
-/* ── 화면 표기 도우미 ─────────────────────────────────────────────── */
-
-/** 등락률을 "+3.2%" 형태로. 값이 없으면 "—" */
-export function pct(v: number | null | undefined, digits = 1): string {
-  if (v == null || !Number.isFinite(v)) return "—";
-  return `${v > 0 ? "+" : ""}${v.toFixed(digits)}%`;
-}
-
-/** 한국 증시 관행: 상승 빨강, 하락 파랑 */
-export function tone(v: number | null | undefined): "up" | "down" | "" {
-  if (v == null || !Number.isFinite(v) || v === 0) return "";
-  return v > 0 ? "up" : "down";
-}
-
-/** 큰 금액을 읽기 쉽게 — 1.2조 / 340억 같은 식은 달러라 어색하므로 M/B 로 */
-export function money(v: number | null | undefined): string {
-  if (v == null || !Number.isFinite(v)) return "—";
-  if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
-  if (v >= 1e6) return `$${(v / 1e6).toFixed(0)}M`;
-  return `$${Math.round(v).toLocaleString("en-US")}`;
-}
+/* 표기 도우미는 lib/format.ts 에 있습니다 — 브라우저 쪽 컴포넌트가
+   이 파일(시세 JSON 포함)을 통째로 끌어가지 않도록 분리했습니다. */
+export { pct, tone, money } from "./format";

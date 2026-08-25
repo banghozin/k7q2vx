@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { ThemeSync } from "@/lib/market-data";
-import { pct, tone } from "@/lib/market-data";
+import { pct, tone } from "@/lib/format";
 import { placementsOf } from "@/data/themes";
 import { useChartModal } from "@/lib/store/chart-modal-store";
 
