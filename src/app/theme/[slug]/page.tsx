@@ -8,8 +8,10 @@ import { LayerHeatMap } from "@/components/layer-heat";
 import { SyncTable } from "@/components/sync-table";
 import { LeaderPanel } from "@/components/leader-panel";
 import { fetchNews, matchTheme } from "@/lib/sbhnews";
+import { ThemeBriefingLine } from "@/components/briefing";
 import {
   asOf,
+  getBriefing,
   getLayerHeat,
   getLeaders,
   getSync,
@@ -51,6 +53,7 @@ export default async function ThemePage({
   const heat = getLayerHeat(theme.slug);
   const sync = getSync(theme.slug);
   const leaders = getLeaders(theme.slug);
+  const brief = getBriefing(theme.slug);
 
   const news = matchTheme(await fetchNews(), theme.newsKeywords, 6);
 
@@ -80,6 +83,14 @@ export default async function ThemePage({
           는 표시입니다. 등락은 <span className="up">빨강이 상승</span>,{" "}
           <span className="down">파랑이 하락</span>입니다.
         </div>
+
+        {brief && brief.riser && (
+          <div className="brief" style={{ marginTop: "1.5rem" }}>
+            <span className="brief__label">한 줄 브리핑</span>
+            <ThemeBriefingLine b={brief} />
+            {asOf && <span className="brief__date mono">{asOf} 종가 기준</span>}
+          </div>
+        )}
 
         {heat.length > 0 && (
           <section className="section" id="heat">

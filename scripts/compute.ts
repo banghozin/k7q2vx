@@ -659,6 +659,97 @@ async function main() {
     };
   }
 
+  /* ── 5. 브리핑 — 층 사이의 순위 이동 ─────────────────────────── */
+
+  /**
+   * "AI가 빠졌다"가 아니라 "AI 안에서 메모리에서 광통신으로 옮겨갔다"를
+   * 자동으로 잡아내는 부분입니다.
+   *
+   * 방법: 같은 층들을 20일 성과로 한 번, 5일 성과로 한 번 줄 세워
+   * **순위가 몇 계단 움직였는지** 봅니다. 20일 순위보다 5일 순위가 크게
+   * 올라간 층은 최근 들어 앞서기 시작한 층입니다.
+   *
+   * 수익률 차이가 아니라 순위 차이를 보는 이유: 시장 전체가 빠진 날에는
+   * 모든 층의 수익률이 같이 내려가 비교가 되지 않습니다. 순위는 그런
+   * 공통 요인에 영향을 받지 않습니다.
+   */
+  type Move = {
+    n: number;
+    key: string;
+    name: string;
+    /** 20일 순위 − 5일 순위. 양수면 최근 들어 앞선 것 */
+    delta: number;
+    rank20: number;
+    rank5: number;
+    ret5: number;
+    ret20: number;
+  };
+
+  const briefing: Record<
+    string,
+    {
+      hottest: { n: number; name: string; ret20: number } | null;
+      coldest: { n: number; name: string; ret20: number } | null;
+      riser: Move | null;
+      faller: Move | null;
+      /** 순위 이동이 뚜렷해 "옮겨갔다"고 말할 만한 경우 */
+      rotated: boolean;
+    }
+  > = {};
+
+  const ROTATE_STEPS = 2; // 이 정도는 움직여야 이동이라고 봅니다
+
+  for (const theme of THEMES) {
+    const rows = (layers[theme.slug]?.layers ?? []).filter(
+      (r): r is typeof r & { ret5: number; ret20: number } =>
+        r.ret5 != null && r.ret20 != null,
+    );
+    if (rows.length < 3) {
+      briefing[theme.slug] = {
+        hottest: null,
+        coldest: null,
+        riser: null,
+        faller: null,
+        rotated: false,
+      };
+      continue;
+    }
+
+    const by20 = [...rows].sort((a, b) => b.ret20 - a.ret20).map((r) => r.key);
+    const by5 = [...rows].sort((a, b) => b.ret5 - a.ret5).map((r) => r.key);
+
+    const moves: Move[] = rows.map((r) => {
+      const rank20 = by20.indexOf(r.key) + 1;
+      const rank5 = by5.indexOf(r.key) + 1;
+      return {
+        n: r.n,
+        key: r.key,
+        name: r.name,
+        delta: rank20 - rank5,
+        rank20,
+        rank5,
+        ret5: r.ret5,
+        ret20: r.ret20,
+      };
+    });
+
+    const riser = moves.reduce((a, b) => (b.delta > a.delta ? b : a));
+    const faller = moves.reduce((a, b) => (b.delta < a.delta ? b : a));
+    const hot = rows.reduce((a, b) => (b.ret20 > a.ret20 ? b : a));
+    const cold = rows.reduce((a, b) => (b.ret20 < a.ret20 ? b : a));
+
+    briefing[theme.slug] = {
+      hottest: { n: hot.n, name: hot.name, ret20: hot.ret20 },
+      coldest: { n: cold.n, name: cold.name, ret20: cold.ret20 },
+      riser,
+      faller,
+      rotated:
+        riser.delta >= ROTATE_STEPS &&
+        faller.delta <= -ROTATE_STEPS &&
+        riser.key !== faller.key,
+    };
+  }
+
   /* ── 저장 ────────────────────────────────────────────────────── */
 
   await mkdir(OUT_DIR, { recursive: true });
@@ -675,6 +766,15 @@ async function main() {
     ["layers.json", { ...meta, themes: layers }],
     ["sync.json", { ...meta, minEvents: MIN_EVENTS, themes: sync }],
     ["leaders.json", { ...meta, themes: leaders }],
+    [
+      "briefing.json",
+      {
+        ...meta,
+        rotateSteps: ROTATE_STEPS,
+        themes: briefing,
+        note: "20일 순위와 5일 순위를 비교해 층 사이의 자리바꿈을 적은 것입니다. 지나간 기록이며 앞날에 대한 말이 아닙니다.",
+      },
+    ],
   ];
 
   for (const [name, data] of files) {

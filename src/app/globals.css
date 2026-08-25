@@ -1408,6 +1408,70 @@ tbody tr:hover {
   color: var(--accent);
 }
 
+/* ── 한 줄 브리핑 ─────────────────────────────────────────────────── */
+
+.brief {
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  padding: 0.9rem 0;
+  position: relative;
+}
+
+.brief__label {
+  display: block;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+
+.brief__line {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.75;
+  color: var(--ink-2);
+  max-width: var(--measure);
+}
+
+.brief__line + .brief__line {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--rule-soft);
+}
+
+.brief__line strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.brief__line b {
+  font-weight: 600;
+}
+
+.brief__theme {
+  display: inline-block;
+  font-family: var(--font-serif), serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule-strong);
+  margin-right: 0.5rem;
+  padding-bottom: 0.05rem;
+}
+
+.brief__theme:hover {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+}
+
+.brief__date {
+  display: block;
+  margin-top: 0.6rem;
+  font-size: 0.66rem;
+  color: var(--ink-4);
+}
+
 /* ── 홈: 뜨거운 층 ────────────────────────────────────────────────── */
 
 .hotgrid {

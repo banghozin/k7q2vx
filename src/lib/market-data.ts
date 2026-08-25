@@ -14,6 +14,7 @@ import stocksJson from "@/data/generated/stocks.json";
 import layersJson from "@/data/generated/layers.json";
 import syncJson from "@/data/generated/sync.json";
 import leadersJson from "@/data/generated/leaders.json";
+import briefingJson from "@/data/generated/briefing.json";
 
 export type StockMetrics = {
   last: number | null;
@@ -80,6 +81,26 @@ export type ThemeLeaders = {
   note: string;
 };
 
+/** 층 사이의 자리바꿈 */
+export type LayerMove = {
+  n: number;
+  key: string;
+  name: string;
+  delta: number;
+  rank20: number;
+  rank5: number;
+  ret5: number;
+  ret20: number;
+};
+
+export type ThemeBriefing = {
+  hottest: { n: number; name: string; ret20: number } | null;
+  coldest: { n: number; name: string; ret20: number } | null;
+  riser: LayerMove | null;
+  faller: LayerMove | null;
+  rotated: boolean;
+};
+
 type Meta = { generatedAt: string; asOf: string; source: string };
 
 const stocksData = stocksJson as unknown as Meta & {
@@ -95,6 +116,28 @@ const syncData = syncJson as unknown as Meta & {
 const leadersData = leadersJson as unknown as Meta & {
   themes: Record<string, ThemeLeaders>;
 };
+const briefingData = briefingJson as unknown as Meta & {
+  themes: Record<string, ThemeBriefing>;
+};
+
+export function getBriefing(themeSlug: string): ThemeBriefing | null {
+  return briefingData?.themes?.[themeSlug] ?? null;
+}
+
+/** 자리바꿈이 뚜렷한 테마들 — 홈의 한 줄 브리핑 재료 */
+export function rotations(): { slug: string; b: ThemeBriefing }[] {
+  const out: { slug: string; b: ThemeBriefing }[] = [];
+  for (const [slug, b] of Object.entries(briefingData?.themes ?? {})) {
+    if (b.rotated && b.riser && b.faller) out.push({ slug, b });
+  }
+  // 많이 움직인 순
+  return out.sort(
+    (a, b) =>
+      (b.b.riser?.delta ?? 0) -
+      (b.b.faller?.delta ?? 0) -
+      ((a.b.riser?.delta ?? 0) - (a.b.faller?.delta ?? 0)),
+  );
+}
 
 /** 데이터 기준일 (미국장 마지막 거래일) */
 export const asOf: string | null = stocksData?.asOf ?? null;

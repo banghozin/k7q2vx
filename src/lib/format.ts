@@ -19,6 +19,37 @@ export function tone(v: number | null | undefined): "up" | "down" | "" {
   return v > 0 ? "up" : "down";
 }
 
+/**
+ * 한글 조사를 받침에 맞춰 고릅니다.
+ *
+ *   josa("설계", "이/가")   → "가"   (설계는 받침 없음)
+ *   josa("패키징", "이/가") → "이"   (징에 받침 ㅇ)
+ *   josa("채굴", "은/는")   → "은"
+ *
+ * 자동으로 만든 문장에 "설계이", "네트워크을" 같은 게 섞이면 바로 기계가 쓴
+ * 티가 납니다. 층 이름이 데이터에서 오기 때문에 반드시 필요합니다.
+ */
+export function josa(word: string, pair: string): string {
+  const [withBatchim, withoutBatchim] = pair.split("/");
+  const ch = word.trim().slice(-1);
+  const code = ch.charCodeAt(0);
+
+  // 한글 음절 영역이면 종성 유무로 판단
+  if (code >= 0xac00 && code <= 0xd7a3) {
+    return (code - 0xac00) % 28 === 0 ? withoutBatchim : withBatchim;
+  }
+
+  // 영문·숫자로 끝나는 경우 — 소리 나는 대로 읽었을 때의 받침으로 판단
+  const lower = ch.toLowerCase();
+  const endsWithBatchim = "lmn013678".includes(lower); // 엘·엠·엔·영·일·삼·육·칠·팔
+  if (/[a-z0-9]/.test(lower)) {
+    return endsWithBatchim ? withBatchim : withoutBatchim;
+  }
+
+  // 판단이 안 되면 받침 있는 쪽으로 (더 자연스럽게 읽히는 편)
+  return withBatchim;
+}
+
 /** 큰 금액을 읽기 쉽게. 달러라 조·억 대신 M·B 를 씁니다 */
 export function money(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "—";

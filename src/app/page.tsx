@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { THEMES, getTheme, multiThemeStocks } from "@/data/themes";
 import { CrossTicker } from "@/components/cross-ticker";
+import { ThemeBriefingLine } from "@/components/briefing";
 import {
   asOf,
   coldestLayers,
   handovers,
   hottestLayers,
   pct,
+  rotations,
   tone,
 } from "@/lib/market-data";
 
@@ -20,6 +22,7 @@ export default function Home() {
   const hot = hottestLayers(3);
   const cold = coldestLayers(3);
   const moves = handovers();
+  const rotated = rotations().slice(0, 4);
 
   return (
     <>
@@ -47,6 +50,30 @@ export default function Home() {
           </div>
         </section>
       </div>
+
+      {rotated.length > 0 && (
+        <div className="wrap">
+          <section className="section">
+            <h2 className="section__title">한 줄 브리핑</h2>
+            <p className="section__sub">
+              20일 순위와 5일 순위를 비교해 <strong>층 사이의 자리바꿈</strong>이
+              뚜렷한 테마만 골랐습니다. 수익률이 아니라 순위로 보는 이유는, 시장
+              전체가 빠진 주에는 모든 층이 같이 내려가 비교가 안 되기 때문입니다.
+              {asOf && <> 기준일은 {asOf} 종가입니다.</>}
+            </p>
+            <div className="brief">
+              {rotated.map(({ slug, b }) => (
+                <ThemeBriefingLine
+                  key={slug}
+                  themeSlug={slug}
+                  themeName={getTheme(slug)?.name}
+                  b={b}
+                />
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
 
       {hot.length > 0 && (
         <div className="wrap">
