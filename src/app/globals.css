@@ -106,7 +106,7 @@ h1,
 h2,
 h3,
 h4 {
-  font-family: var(--font-serif), "Apple SD Gothic Neo", serif;
+  font-family: var(--font-display), "Apple SD Gothic Neo", sans-serif;
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.3;
@@ -188,7 +188,7 @@ button {
 }
 
 .brand__name {
-  font-family: var(--font-serif), serif;
+  font-family: var(--font-display), sans-serif;
   font-size: 1.05rem;
   font-weight: 600;
   letter-spacing: -0.02em;
@@ -307,7 +307,7 @@ button {
   margin-top: 1.5rem;
   padding-left: 1rem;
   border-left: 2px solid var(--accent);
-  font-family: var(--font-serif), serif;
+  font-family: var(--font-display), sans-serif;
   font-size: 1.05rem;
   color: var(--ink);
   max-width: var(--measure);
@@ -654,7 +654,7 @@ button {
 }
 
 .themecard__name {
-  font-family: var(--font-serif), serif;
+  font-family: var(--font-display), sans-serif;
   font-size: 1.2rem;
   font-weight: 600;
 }
@@ -1368,6 +1368,83 @@ tbody tr:hover {
   height: 100%;
 }
 
+/* ── 펜 (색·굵기 고르기) ───────────────────────────────────────── */
+
+/* 3열 두 줄. 한 줄에 다 넣으려다 5+1 로 갈라져 빈 칸이 남았습니다 */
+.prac__swatches {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+  margin-bottom: 0.55rem;
+}
+
+.prac__swatch {
+  width: 100%;
+  height: 1.85rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+
+.prac__swatch:hover {
+  transform: translateY(-1px);
+}
+
+/* 고른 색은 테두리로 표시합니다 — 색 위에 다른 색을 얹지 않으려고 */
+.prac__swatch[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px var(--ground-2), 0 0 0 3px var(--ink);
+}
+
+.prac__widths {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.prac__width {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.4rem 0.2rem;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--ink-4);
+  font-family: inherit;
+  font-size: 0.66rem;
+  cursor: pointer;
+}
+
+.prac__width i {
+  display: block;
+  width: 70%;
+  border-radius: 2px;
+}
+
+.prac__width[aria-pressed="true"] {
+  border-color: var(--brass);
+  color: var(--ink-2);
+}
+
+.prac__penhint {
+  margin: 0.5rem 0 0;
+  font-size: 0.66rem;
+  line-height: 1.6;
+  color: var(--ink-4);
+}
+
+.prac__drawn li kbd,
+.prac__row kbd {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.62rem;
+  color: var(--ink-4);
+  margin-left: 0.3rem;
+}
+
 /* ── 지난 훈련 기록 (차트 위에 덮는 판) ─────────────────────────── */
 
 .praclog {
@@ -1389,7 +1466,7 @@ tbody tr:hover {
 }
 
 .praclog__head h2 {
-  font-family: var(--font-serif), serif;
+  font-family: var(--font-display), sans-serif;
   font-size: 1.15rem;
   font-weight: 500;
   margin: 0;
@@ -2362,7 +2439,7 @@ tbody tr:hover {
 
 .brief__theme {
   display: inline-block;
-  font-family: var(--font-serif), serif;
+  font-family: var(--font-display), sans-serif;
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--ink);
@@ -2415,7 +2492,7 @@ tbody tr:hover {
 }
 
 .hotcard__layer {
-  font-family: var(--font-serif), serif;
+  font-family: var(--font-display), sans-serif;
   font-size: 1.05rem;
   font-weight: 600;
 }
@@ -2666,6 +2743,15 @@ tbody tr:hover {
 
   /* 숫자를 직접 치는 칸 — 26px 은 손가락으로 겨냥하기 어렵습니다 */
   .readout__value input {
+    min-height: 44px;
+  }
+
+  /* 색 견본도 손가락으로 눌러야 합니다 */
+  .prac__swatch {
+    height: 44px;
+  }
+
+  .prac__width {
     min-height: 44px;
   }
 

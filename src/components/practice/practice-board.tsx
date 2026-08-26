@@ -5,7 +5,7 @@ import type { KLineData } from "klinecharts";
 import { allTickers, nameOf } from "@/data/themes";
 import { pct, tone } from "@/lib/format";
 import { usePractice } from "@/lib/store/practice-store";
-import { Kline, type KlineHandle } from "./kline";
+import { Kline, type KlineHandle, type Pen } from "./kline";
 import { PracticeLog } from "./practice-log";
 
 /**
@@ -38,8 +38,14 @@ type Bar = {
 
 /** 처음에 보여줄 봉 개수 */
 const VISIBLE = 180;
-/** 가린 뒤 열어볼 수 있는 최대 봉 개수 */
-const FORWARD = 60;
+/**
+ * 가린 뒤 열어볼 수 있는 최대 봉 개수.
+ *
+ * 60봉(석 달)은 "그래서 어떻게 됐나"를 보기에 짧았습니다. 내가 그은 추세선이
+ * 결국 지켜졌는지, 파동이 어디서 끝났는지는 **반년쯤** 지나야 모양이 납니다.
+ * 그래서 120봉으로 늘렸습니다.
+ */
+const FORWARD = 120;
 /** 오른쪽에 앞날을 그릴 빈 자리 (px) */
 const FUTURE_SPACE = 260;
 
@@ -57,9 +63,9 @@ const DRAW_GROUPS: {
   {
     title: "파동",
     tools: [
-      { key: "elliottImpulse", label: "12345 파동", hint: "다섯 점을 순서대로 찍으면 번호가 붙습니다" },
-      { key: "elliottCorrection", label: "ABC 조정", hint: "세 점을 찍습니다" },
-      { key: "elliottTriangle", label: "abcde 삼각형", hint: "다섯 점을 찍습니다" },
+      { key: "elliottImpulse", label: "12345 파동", hint: "출발점부터 여섯 점. 1~5 번호가 자동으로 붙습니다" },
+      { key: "elliottCorrection", label: "ABC 조정", hint: "출발점부터 네 점. Z 자로 긋습니다" },
+      { key: "elliottTriangle", label: "abcde 삼각형", hint: "출발점부터 여섯 점. 폭이 좁아지게 긋습니다" },
       { key: "fibRetracement", label: "피보나치", hint: "고점과 저점 두 점. 찍은 구간에만 그려집니다" },
     ],
   },
@@ -72,7 +78,7 @@ const DRAW_GROUPS: {
       { key: "horizontalStraightLine", label: "수평선", hint: "지지·저항 자리" },
       { key: "priceChannelLine", label: "채널", hint: "세 점으로 평행 채널" },
       { key: "parallelStraightLine", label: "평행선", hint: "세 점으로 평행선" },
-      { key: "brush", label: "자유선", hint: "손으로 그리듯" },
+      { key: "freeCurve", label: "자유곡선", hint: "누른 채로 끌면 그려집니다" },
       { key: "simpleAnnotation", label: "메모", hint: "글자를 적습니다" },
     ],
   },
@@ -91,6 +97,28 @@ const INDICATORS: { key: string; label: string; onCandle: boolean }[] = [
   { key: "MACD", label: "MACD", onCandle: false },
   { key: "RSI", label: "RSI", onCandle: false },
   { key: "KDJ", label: "스토캐스틱", onCandle: false },
+];
+
+/**
+ * 고를 수 있는 색.
+ *
+ * 어두운 바탕에서 서로 구분되고 캔들(빨강·파랑)과도 헷갈리지 않는 것으로
+ * 골랐습니다. 색이 많으면 화면만 시끄러워지므로 여섯으로 끊었습니다.
+ */
+const PENS: { color: string; label: string }[] = [
+  { color: "#c8a15a", label: "황동" },
+  { color: "#e9e5dd", label: "흰빛" },
+  { color: "#7fa86b", label: "풀색" },
+  { color: "#5bc8d6", label: "하늘" },
+  { color: "#d97fb8", label: "자주" },
+  { color: "#f0a23c", label: "주황" },
+];
+
+/** 굵기 세 단계면 충분합니다 */
+const WIDTHS: { size: number; label: string }[] = [
+  { size: 1, label: "얇게" },
+  { size: 2, label: "보통" },
+  { size: 3.5, label: "굵게" },
 ];
 
 type Phase = "loading" | "draw" | "reveal" | "error";
@@ -123,6 +151,12 @@ export function PracticeBoard() {
   const [chartReady, setChartReady] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [penColor, setPenColor] = useState(PENS[0].color);
+  const [penSize, setPenSize] = useState(2);
+  /** 클릭해서 고른, 이미 그려진 것 */
+  const [picked, setPicked] = useState<{ id: string; name: string } | null>(
+    null,
+  );
   /** 같은 판을 두 번 저장하지 않게 */
   const [saved, setSaved] = useState(false);
 
@@ -219,7 +253,26 @@ export function PracticeBoard() {
     if (w === 0) return;
     chart.current?.fitAll(w < 640 ? 70 : VISIBLE);
     chart.current?.setFutureSpace(futureSpace);
+    // 새 문제에서만 맞춥니다 — 여는 도중에 자꾸 배율이 바뀌면 어지럽습니다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chartReady, round]);
+
+  /*
+   * 열 때마다 **뒤로 물러나 큰 그림이 보이게** 합니다.
+   *
+   * 이게 없으면 봉을 열어도 배율이 그대로라 새 봉들이 오른쪽 밖으로 밀려
+   * 조금밖에 안 보입니다. 훈련의 목적이 "내가 그은 선 위로 실제가 어떻게
+   * 지나갔나"를 보는 것이므로, 열린 만큼 화면을 넓혀야 합니다.
+   */
+  useEffect(() => {
+    if (!chartReady || !round || phase !== "reveal") return;
+    const w = chart.current?.width() ?? 0;
+    if (w === 0) return;
+    const past = w < 640 ? 70 : VISIBLE;
+    chart.current?.fitAll(past + shown);
+    chart.current?.setFutureSpace(futureSpace);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chartReady, phase, shown]);
 
   /* ── 실제와 대조 ─────────────────────────────────────────────── */
 
@@ -318,6 +371,40 @@ export function PracticeBoard() {
     chart.current?.fitAll(VISIBLE + shown);
   }, [shown]);
 
+  const undo = useCallback(() => {
+    chart.current?.undo();
+    setPicked(null);
+    refreshDrawings();
+  }, [refreshDrawings]);
+
+  /*
+   * PC 에서는 Ctrl+Z(맥은 ⌘Z)로도 되돌립니다. 그림을 그리다 보면 손이 먼저
+   * 그리로 갑니다. 글자를 치는 칸에 있을 때는 가로채지 않습니다 — 메모를
+   * 쓰다가 되돌리기가 걸리면 곤란합니다.
+   */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z") return;
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || el?.isContentEditable) return;
+      e.preventDefault();
+      undo();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo]);
+
+  /** 고른 것의 색·굵기를 바꿉니다. 아무것도 안 골랐으면 다음에 그릴 펜만 바꿉니다 */
+  const applyPen = useCallback(
+    (color: string, size: number) => {
+      setPenColor(color);
+      setPenSize(size);
+      if (picked) chart.current?.restyle(picked.id, { color, size });
+    },
+    [picked],
+  );
+
   const cutDate = round
     ? fmtDate.format(new Date((round.bars[round.cut - 1]?.time ?? 0) * 1000))
     : "";
@@ -390,6 +477,48 @@ export function PracticeBoard() {
 
       <div className="prac__body">
         <aside className={`prac__tools${panelOpen ? " is-open" : ""}`}>
+          {/*
+            펜은 도구보다 위에 둡니다. 색을 먼저 고르고 그리는 순서가
+            자연스럽고, 이미 그은 선을 클릭해 고른 상태면 그 선이 바로
+            바뀝니다 — 같은 자리에서 두 가지를 다 합니다.
+          */}
+          <section className="prac__pen">
+            <h2>{picked ? `${TOOL_NAME[picked.name] ?? picked.name} 색·굵기` : "펜"}</h2>
+            <div className="prac__swatches">
+              {PENS.map((p) => (
+                <button
+                  key={p.color}
+                  type="button"
+                  className="prac__swatch"
+                  style={{ background: p.color }}
+                  aria-label={p.label}
+                  aria-pressed={penColor === p.color}
+                  title={p.label}
+                  onClick={() => applyPen(p.color, penSize)}
+                />
+              ))}
+            </div>
+            <div className="prac__widths">
+              {WIDTHS.map((w) => (
+                <button
+                  key={w.size}
+                  type="button"
+                  className="prac__width"
+                  aria-pressed={penSize === w.size}
+                  onClick={() => applyPen(penColor, w.size)}
+                >
+                  <i style={{ height: `${w.size}px`, background: penColor }} />
+                  <span>{w.label}</span>
+                </button>
+              ))}
+            </div>
+            <p className="prac__penhint">
+              {picked
+                ? "고른 선에 바로 적용됩니다. 빈 곳을 누르면 선택이 풀립니다."
+                : "그려 둔 선을 눌러 고르면 그 선의 색·굵기를 바꿉니다."}
+            </p>
+          </section>
+
           {DRAW_GROUPS.map((g) => (
             <section key={g.title}>
               <h2>{g.title}</h2>
@@ -403,7 +532,10 @@ export function PracticeBoard() {
                     title={t.hint}
                     onClick={() => {
                       setTool(t.key);
-                      chart.current?.startDraw(t.key);
+                      chart.current?.startDraw(t.key, {
+                        color: penColor,
+                        size: penSize,
+                      });
                       setPanelOpen(false);
                       // 그리고 나면 목록이 바뀌므로 조금 뒤 새로고침합니다
                       setTimeout(refreshDrawings, 400);
@@ -440,12 +572,10 @@ export function PracticeBoard() {
                 <button
                   type="button"
                   className="btn btn--ghost"
-                  onClick={() => {
-                    chart.current?.undo();
-                    refreshDrawings();
-                  }}
+                  title="Ctrl+Z 로도 됩니다"
+                  onClick={undo}
                 >
-                  되돌리기
+                  되돌리기 <kbd>Ctrl+Z</kbd>
                 </button>
                 <button
                   type="button"
@@ -563,7 +693,11 @@ export function PracticeBoard() {
               </button>
             </div>
           )}
-          <Kline ref={chart} onReady={() => setChartReady(true)} />
+          <Kline
+            ref={chart}
+            onReady={() => setChartReady(true)}
+            onSelect={setPicked}
+          />
           {logOpen && <PracticeLog onClose={() => setLogOpen(false)} />}
         </main>
       </div>

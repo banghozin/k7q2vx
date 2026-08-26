@@ -21,6 +21,21 @@ const INK = "#e9e5dd";
 const MUTED = "#9aa2ae";
 
 /**
+ * 그릴 때 고른 색과 굵기를 도형에 그대로 씁니다.
+ *
+ * klinecharts 는 도형마다 `styles` 를 주면 그게 최우선입니다. 우리 도구들은
+ * 색을 코드에 박아 뒀었는데, 그러면 화면에서 색을 골라도 먹히지 않습니다.
+ * 그래서 도구를 만들 때 넘긴 `styles.line` 을 먼저 보고, 없으면 기본값을
+ * 씁니다.
+ */
+type OverlayLike = { styles?: { line?: { color?: string; size?: number } } };
+
+function penOf(overlay: unknown, fallback: string) {
+  const line = (overlay as OverlayLike | undefined)?.styles?.line;
+  return { color: line?.color ?? fallback, size: line?.size ?? 1.6 };
+}
+
+/**
  * klinecharts 의 글자 도형은 기본으로 **배경 상자**가 붙습니다. 그대로 두면
  * 비율 라벨마다 파란 알약이 생겨 서로 겹치고 가격축까지 침범합니다.
  * 배경과 여백을 전부 없애 트레이딩뷰처럼 글자만 남깁니다.
@@ -39,24 +54,30 @@ const BARE_TEXT = {
 
 const FIB = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
 
-/** 구간마다 깔 옅은 색. 위로 갈수록 진해집니다 */
-const BAND = [
-  "rgba(200,161,90,0.05)",
-  "rgba(200,161,90,0.07)",
-  "rgba(200,161,90,0.09)",
-  "rgba(200,161,90,0.09)",
-  "rgba(200,161,90,0.07)",
-  "rgba(200,161,90,0.05)",
-];
+/** 구간마다 깔 옅은 색의 진하기. 가운데(38.2~61.8)가 조금 진합니다 */
+const BAND_ALPHA = [0.05, 0.07, 0.09, 0.09, 0.07, 0.05];
+
+/**
+ * 고른 색을 아주 옅게 깔아 구간을 구분합니다.
+ * 색을 직접 고를 수 있게 되면서 고정 rgba 를 못 쓰게 되어 만든 것입니다.
+ */
+function bandOf(hex: string, i: number): string {
+  const a = BAND_ALPHA[i] ?? 0.06;
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return `rgba(200,161,90,${a})`; // 알아볼 수 없으면 기본 황동색
+  const n = Number.parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
 
 export const fibRetracement: OverlayTemplate = {
   name: "fibRetracement",
   totalStep: 3, // 점 두 개를 찍으면 완성
   needDefaultPointFigure: true,
-  needDefaultXAxisFigure: true,
+  needDefaultXAxisFigure: false, // 일봉이라 "22:30" 같은 시각 표기는 군더더기입니다
   needDefaultYAxisFigure: true,
   createPointFigures: ({ coordinates, overlay, bounding }) => {
     if (coordinates.length < 2) return [];
+    const pen = penOf(overlay, GOLD);
 
     const [a, b] = coordinates;
     const pa = overlay.points[0]?.value;
@@ -92,7 +113,7 @@ export const fibRetracement: OverlayTemplate = {
             { x: left, y: y2 },
           ],
         },
-        styles: { style: "fill", color: BAND[i] },
+        styles: { style: "fill", color: bandOf(pen.color, i) },
         ignoreEvent: true,
       });
     }
@@ -126,8 +147,8 @@ export const fibRetracement: OverlayTemplate = {
           ],
         },
         styles: {
-          color: isEdge ? INK : GOLD,
-          size: isEdge ? 1.4 : 1,
+          color: isEdge ? INK : pen.color,
+          size: isEdge ? Math.max(1.2, pen.size * 0.9) : Math.max(0.8, pen.size * 0.65),
           style: isEdge ? "solid" : "dashed",
         },
       });
@@ -154,7 +175,7 @@ export const fibRetracement: OverlayTemplate = {
     figures.push({
       type: "line",
       attrs: { coordinates: [a, b] },
-      styles: { color: GOLD, size: 1, style: "dashed" },
+      styles: { color: pen.color, size: 1, style: "dashed" },
     });
 
     return figures;
@@ -170,17 +191,31 @@ export const fibRetracement: OverlayTemplate = {
 function wave(
   name: string,
   labels: string[],
-  color: string,
+  fallback: string,
   style: "solid" | "dashed",
 ): OverlayTemplate {
+  /*
+   * **점은 라벨보다 하나 많습니다.**
+   *
+   * ABC 조정은 A·B·C 세 점이 아니라 *출발점* + A·B·C 네 점입니다. 세 점만
+   * 찍으면 선분이 둘뿐이라 V 자가 되고, 조정파의 Z(번개) 모양이 안 나옵니다.
+   * 처음에 세 점으로 만들었다가 "z자 그리기도 전에 끝난다"는 지적을 받고
+   * 고쳤습니다. 12345 파동도 같은 이유로 0 에서 출발해 여섯 점입니다.
+   *
+   * 트레이딩뷰의 엘리어트 도구도 같은 방식입니다.
+   */
+  const pointLabels = ["", ...labels]; // 출발점은 라벨 없이
+  const points = pointLabels.length;
+
   return {
     name,
-    totalStep: labels.length + 1, // 라벨 수만큼 점을 찍으면 완성
+    totalStep: points + 1, // 점 수만큼 찍으면 완성
     needDefaultPointFigure: true,
-    needDefaultXAxisFigure: true,
+    needDefaultXAxisFigure: false, // 일봉인데 "22:30" 같은 시각이 붙어 지저분합니다
     needDefaultYAxisFigure: true,
-    createPointFigures: ({ coordinates }) => {
+    createPointFigures: ({ coordinates, overlay }) => {
       if (coordinates.length < 1) return [];
+      const pen = penOf(overlay, fallback);
       const figures: {
         type: string;
         attrs: unknown;
@@ -192,12 +227,12 @@ function wave(
         figures.push({
           type: "line",
           attrs: { coordinates },
-          styles: { color, size: 1.6, style },
+          styles: { color: pen.color, size: pen.size, style },
         });
       }
 
       coordinates.forEach((c, i) => {
-        const label = labels[i];
+        const label = pointLabels[i];
         if (!label) return;
         // 파동 방향에 따라 라벨을 봉 위나 아래에 둡니다 — 캔들을 가리지 않게
         const prev = coordinates[i - 1];
@@ -211,7 +246,12 @@ function wave(
             align: "center",
             baseline: up ? "bottom" : "top",
           },
-          styles: { ...BARE_TEXT, color, size: 13, weight: "bold" },
+          styles: {
+            ...BARE_TEXT,
+            color: pen.color,
+            size: 13,
+            weight: "bold",
+          },
           ignoreEvent: true,
         });
       });
@@ -220,6 +260,39 @@ function wave(
     },
   };
 }
+
+/**
+ * 자유 곡선 — 누른 채로 끌면 그려집니다.
+ *
+ * klinecharts 기본 `brush` 와 같은 방식(`drawingMode: "continuous"`)이지만
+ * 두 가지가 다릅니다. 꺾인 자리를 부드럽게 잇고(`smooth`), 화면에서 고른
+ * 색과 굵기를 따릅니다. 기본 brush 는 각져서 손으로 그은 느낌이 안 납니다.
+ */
+export const freeCurve: OverlayTemplate = {
+  name: "freeCurve",
+  totalStep: 2,
+  drawingMode: "continuous",
+  needDefaultPointFigure: false,
+  needDefaultXAxisFigure: false,
+  needDefaultYAxisFigure: false,
+  createPointFigures: ({ coordinates, overlay }) => {
+    if (coordinates.length < 2) return [];
+    const pen = penOf(overlay, GOLD);
+    return [
+      {
+        type: "line",
+        attrs: { coordinates },
+        styles: {
+          color: pen.color,
+          size: pen.size,
+          smooth: true,
+          lineCap: "round",
+          lineJoin: "round",
+        },
+      },
+    ];
+  },
+};
 
 export const elliottImpulse = wave(
   "elliottImpulse",
@@ -247,4 +320,5 @@ export const CUSTOM_OVERLAYS: OverlayTemplate[] = [
   elliottImpulse,
   elliottCorrection,
   elliottTriangle,
+  freeCurve,
 ];

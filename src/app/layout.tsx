@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans_KR, Noto_Serif_KR } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans_KR } from "next/font/google";
 import "./globals.css";
 import { Masthead } from "@/components/masthead";
 import { ThemeRail } from "@/components/theme-rail";
@@ -13,10 +13,18 @@ const sans = IBM_Plex_Sans_KR({
   display: "swap",
 });
 
-const serif = Noto_Serif_KR({
+/*
+ * 제목용 글꼴.
+ *
+ * 처음에는 명조(Noto Serif KR)를 썼습니다. "지층 단면도" 라는 컨셉에 맞고
+ * 본문 고딕과 대비도 컸지만, **화면 전체를 고딕으로 해 달라**는 요청에 따라
+ * 바꿨습니다. 대신 제목은 굵기(600)와 자간을 좁혀 본문과 구분합니다 —
+ * 글꼴로 주던 대비를 굵기와 크기로 옮긴 셈입니다.
+ */
+const display = IBM_Plex_Sans_KR({
   subsets: ["latin"],
-  weight: ["400", "600", "700"],
-  variable: "--font-serif",
+  weight: ["500", "600", "700"],
+  variable: "--font-display",
   display: "swap",
 });
 
@@ -47,7 +55,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ko" className={`${sans.variable} ${serif.variable} ${mono.variable}`}>
+    <html lang="ko" className={`${sans.variable} ${display.variable} ${mono.variable}`}>
       <body>
         <a href="#main" className="skip">
           본문으로 건너뛰기

@@ -12,11 +12,16 @@ import type { Chart, KLineData } from "klinecharts";
  * (실제로 그 오류를 먼저 만나고 이렇게 고쳤습니다.)
  */
 
+/** 그릴 때 쓰는 펜 — 화면에서 고른 색과 굵기 */
+export type Pen = { color: string; size: number };
+
 export type KlineHandle = {
   /** 봉 데이터를 통째로 갈아끼웁니다 */
   setData: (bars: KLineData[]) => void;
-  /** 그리기 도구를 켭니다 */
-  startDraw: (name: string) => void;
+  /** 그리기 도구를 켭니다. 지금 고른 펜으로 그립니다 */
+  startDraw: (name: string, pen: Pen) => void;
+  /** 이미 그린 것 하나의 색·굵기를 바꿉니다 */
+  restyle: (id: string, pen: Pen) => void;
   /** 그린 것을 모두 지웁니다 */
   clearDrawings: () => void;
   /** 마지막에 그린 것 하나를 지웁니다 */
@@ -50,15 +55,32 @@ export type KlineHandle = {
   width: () => number;
 };
 
+/** 펜 하나를 klinecharts 가 아는 모양으로 바꿉니다 */
+function penStyles(pen: Pen) {
+  return {
+    line: { color: pen.color, size: pen.size },
+    point: { color: pen.color, borderColor: "rgba(255,255,255,.18)" },
+    text: { color: pen.color },
+    polygon: { color: pen.color, borderColor: pen.color },
+  };
+}
+
 export function Kline({
   ref,
   onReady,
+  onSelect,
 }: {
   ref: React.Ref<KlineHandle>;
   onReady?: () => void;
+  /** 그려진 것을 클릭해 고르거나 풀었을 때 알려 줍니다 (색·굵기를 바꾸려고) */
+  onSelect?: (picked: { id: string; name: string } | null) => void;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<Chart | null>(null);
+  // 고른 것 알림은 ref 로 들고 있습니다 — 그리기 시작할 때 건 함수가
+  // 나중 렌더의 것을 가리키게 하려는 것입니다
+  const selectRef = useRef(onSelect);
+  selectRef.current = onSelect;
   const drawnRef = useRef<string[]>([]);
   const indicatorsRef = useRef<Map<string, string>>(new Map());
   const cleanupRef = useRef<(() => void) | null>(null);
@@ -153,6 +175,20 @@ export function Kline({
       chartRef.current = chart;
 
       /*
+       * 일봉만 다루므로 시각은 군더더기입니다. 기본값은 축과 십자선에
+       * "2025-06-24 22:30" 처럼 시각까지 붙여 놓는데, 미국장 마감을 한국
+       * 시각으로 옮긴 숫자라 오해를 부릅니다("이거 일봉 맞나?").
+       * 날짜만 남깁니다.
+       */
+      chart.setFormatter({
+        formatDate: ({ timestamp }) => {
+          const d = new Date(timestamp);
+          const p = (n: number) => String(n).padStart(2, "0");
+          return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
+        },
+      });
+
+      /*
        * 좁은 화면에서 가격 눈금이 사라지는 일이 있었습니다. 화면 배치가
        * 끝나기 전에 차트가 크기를 재서 생긴 문제라, 배치가 끝난 뒤 한 번 더
        * 재게 합니다. 창 크기가 바뀔 때도 같이 다시 잽니다.
@@ -193,9 +229,35 @@ export function Kline({
         getBars: ({ callback }) => callback(bars, false),
       });
     },
-    startDraw(name) {
-      const id = chartRef.current?.createOverlay(name);
+    startDraw(name, pen) {
+      /*
+       * 색·굵기를 만들 때 함께 넘깁니다. klinecharts 는 이걸 `overlay.styles`
+       * 로 들고 있고, 우리 도구들은 그 값을 읽어 그립니다(overlays.ts 참고).
+       * 기본 도구들은 라이브러리가 알아서 씁니다.
+       *
+       * 클릭해서 고르면 알려 주도록 `onSelected` 도 같이 겁니다 — 그래야
+       * 이미 그은 선의 색을 나중에 바꿀 수 있습니다.
+       */
+      const id = chartRef.current?.createOverlay({
+        name,
+        styles: penStyles(pen),
+        onSelected: (e) => {
+          selectRef.current?.({ id: String(e.overlay.id), name: e.overlay.name });
+          return false;
+        },
+        onDeselected: () => {
+          selectRef.current?.(null);
+          return false;
+        },
+        onRemoved: () => {
+          selectRef.current?.(null);
+          return false;
+        },
+      });
       if (typeof id === "string") drawnRef.current.push(id);
+    },
+    restyle(id, pen) {
+      chartRef.current?.overrideOverlay({ id, styles: penStyles(pen) });
     },
     clearDrawings() {
       const chart = chartRef.current;
