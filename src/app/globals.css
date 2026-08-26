@@ -1751,6 +1751,79 @@ tbody tr:hover {
   border: 1px solid var(--rule);
 }
 
+/* ── 지난 며칠 브리핑 모아보기 ─────────────────────────────────── */
+
+.bhist {
+  list-style: none;
+  margin: 1.1rem 0 0;
+  padding: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.bhist__row {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, 1fr) minmax(9rem, 2.4fr) auto;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: 0.84rem;
+}
+
+.bhist__theme {
+  color: var(--ink-2);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.bhist__theme:hover {
+  color: var(--brass);
+  border-bottom-color: var(--brass);
+}
+
+.bhist__top {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.bhist__top strong {
+  color: var(--ink);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bhist__count {
+  color: var(--ink-4);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.bhist__rot {
+  color: var(--ink-3);
+  font-size: 0.74rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/*
+ * 좁은 화면에서는 세 칸이 다 안 들어갑니다. 테마 이름을 머리로 올리고
+ * 나머지를 그 아래에 둡니다 — 가로로 밀어 보게 하지 않습니다.
+ */
+@media (max-width: 640px) {
+  .bhist__row {
+    grid-template-columns: 1fr auto;
+    gap: 0.25rem 0.6rem;
+  }
+
+  .bhist__theme {
+    grid-column: 1 / -1;
+  }
+}
+
 .heatrow {
   display: grid;
   grid-template-columns: 2.6rem minmax(6rem, 1fr) minmax(4rem, 2fr) 4rem 3rem;

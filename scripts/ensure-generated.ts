@@ -23,6 +23,7 @@ const EMPTY: Record<string, unknown> = {
   "leaders.json": { generatedAt: "", asOf: "", source: "", themes: {} },
   "briefing.json": { generatedAt: "", asOf: "", source: "", themes: {} },
   "rotation.json": { generatedAt: "", asOf: "", source: "", themes: {} },
+  "briefing-history.json": { generatedAt: "", asOf: "", keepDays: 90, days: [] },
 };
 
 mkdirSync(DIR, { recursive: true });

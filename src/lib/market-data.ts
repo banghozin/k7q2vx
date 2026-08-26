@@ -16,6 +16,7 @@ import syncJson from "@/data/generated/sync.json";
 import leadersJson from "@/data/generated/leaders.json";
 import briefingJson from "@/data/generated/briefing.json";
 import rotationJson from "@/data/generated/rotation.json";
+import historyJson from "@/data/generated/briefing-history.json";
 
 export type StockMetrics = {
   last: number | null;
@@ -151,6 +152,40 @@ const briefingData = briefingJson as unknown as Meta & {
 const rotationData = rotationJson as unknown as Meta & {
   themes: Record<string, ThemeRotation>;
 };
+
+/* ── 지난 브리핑 ─────────────────────────────────────────────────── */
+
+/** 하루치 기록. briefing.json 에서 뒤에 다시 볼 것만 남긴 것 */
+export type BriefingDay = {
+  asOf: string;
+  themes: Record<
+    string,
+    {
+      hottest: { n: number; name: string; ret20: number } | null;
+      riser: { n: number; name: string; delta: number } | null;
+      faller: { n: number; name: string; delta: number } | null;
+      rotated: boolean;
+    }
+  >;
+};
+
+const historyData = historyJson as unknown as {
+  generatedAt: string;
+  asOf: string;
+  days: BriefingDay[];
+};
+
+/**
+ * 최근 며칠치 기록. 오래된 것이 앞, 최근 것이 뒤입니다.
+ *
+ * 2026-08-26 부터 쌓기 시작했으므로 처음에는 짧습니다. 화면은 며칠치인지를
+ * 밝히고, 너무 짧으면 아직 쌓는 중이라고 말합니다 — 없는 것을 있는 척하지
+ * 않기 위해서입니다.
+ */
+export function briefingHistory(days = 7): BriefingDay[] {
+  const all = historyData?.days ?? [];
+  return all.slice(-days);
+}
 
 export function getBriefing(themeSlug: string): ThemeBriefing | null {
   return briefingData?.themes?.[themeSlug] ?? null;

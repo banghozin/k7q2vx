@@ -3,6 +3,7 @@ import { THEMES, getTheme, multiThemeStocks } from "@/data/themes";
 import { CrossTicker } from "@/components/cross-ticker";
 import { NewsList } from "@/components/news-list";
 import { fetchNews } from "@/lib/sbhnews";
+import { BriefHistory } from "@/components/brief-history";
 import { ThemeBriefingLine } from "@/components/briefing";
 import {
   asOf,
@@ -97,6 +98,9 @@ export default async function Home() {
           </section>
         </div>
       )}
+
+      {/* 기록이 사흘도 안 쌓였으면 스스로 아무것도 내보내지 않습니다 */}
+      <BriefHistory />
 
       {hot.length > 0 && (
         <div className="wrap">

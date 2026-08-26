@@ -962,6 +962,74 @@ async function main() {
     ],
   ];
 
+  /*
+   * 브리핑을 날짜별로 쌓아 둡니다.
+   *
+   * briefing.json 은 **오늘 것만** 담고 내일이면 덮어씁니다. 그러면 "이번 주에
+   * 무슨 일이 있었나"를 영영 못 봅니다. 뉴스 아카이브와 같은 이유로, 지나가면
+   * 되찾을 수 없으니 지금부터 쌓습니다.
+   *
+   * 하루치 전부가 아니라 **뒤에서 다시 볼 것만** 남깁니다 — 어느 층이 가장
+   * 뜨거웠는지, 어느 층이 올라서고 내려앉았는지. 90일치면 한 분기입니다.
+   */
+  const HISTORY_DAYS = 90;
+  const historyPath = `${OUT_DIR}/briefing-history.json`;
+  type HistoryDay = {
+    asOf: string;
+    themes: Record<
+      string,
+      {
+        hottest: { n: number; name: string; ret20: number } | null;
+        riser: { n: number; name: string; delta: number } | null;
+        faller: { n: number; name: string; delta: number } | null;
+        rotated: boolean;
+      }
+    >;
+  };
+
+  let days: HistoryDay[] = [];
+  try {
+    const prev = JSON.parse(await readFile(historyPath, "utf8")) as {
+      days?: HistoryDay[];
+    };
+    if (Array.isArray(prev.days)) days = prev.days;
+  } catch {
+    // 처음 도는 날에는 파일이 없습니다. 빈 목록으로 시작합니다
+  }
+
+  const today: HistoryDay = { asOf, themes: {} };
+  for (const [slug, b] of Object.entries(briefing)) {
+    today.themes[slug] = {
+      hottest: b.hottest
+        ? { n: b.hottest.n, name: b.hottest.name, ret20: b.hottest.ret20 }
+        : null,
+      riser: b.riser
+        ? { n: b.riser.n, name: b.riser.name, delta: b.riser.delta }
+        : null,
+      faller: b.faller
+        ? { n: b.faller.n, name: b.faller.name, delta: b.faller.delta }
+        : null,
+      rotated: b.rotated,
+    };
+  }
+
+  // 같은 날 두 번 돌면 덮어씁니다 — 장중에 손으로 돌려볼 수 있으므로
+  days = days.filter((d) => d.asOf !== asOf);
+  days.push(today);
+  days.sort((a, b) => (a.asOf < b.asOf ? -1 : 1));
+  days = days.slice(-HISTORY_DAYS);
+
+  files.push([
+    "briefing-history.json",
+    {
+      generatedAt: meta.generatedAt,
+      asOf,
+      keepDays: HISTORY_DAYS,
+      days,
+      note: "하루 1회 계산할 때마다 그날의 브리핑을 덧붙인 기록입니다. 지나간 기록이며 앞날에 대한 말이 아닙니다.",
+    },
+  ]);
+
   for (const [name, data] of files) {
     const json = JSON.stringify(data) + "\n";
     // NaN·Infinity 가 섞이면 JSON.stringify 가 null 로 바꿔버려 조용히 넘어간다.
