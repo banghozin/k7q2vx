@@ -20,6 +20,8 @@ export type KlineHandle = {
   setData: (bars: KLineData[], period: Period) => void;
   /** 그리기 도구를 켭니다. 지금 고른 펜으로 그립니다 */
   startDraw: (name: string, pen: Pen) => void;
+  /** 아직 다 못 그린 도형을 물립니다 (도구를 끌 때) */
+  cancelDraw: () => void;
   /** 이미 그린 것 하나의 색·굵기를 바꿉니다 */
   restyle: (id: string, pen: Pen) => void;
   /** 그린 것을 모두 지웁니다 */
@@ -69,11 +71,14 @@ export function Kline({
   ref,
   onReady,
   onSelect,
+  onDrawEnd,
 }: {
   ref: React.Ref<KlineHandle>;
   onReady?: () => void;
   /** 그려진 것을 클릭해 고르거나 풀었을 때 알려 줍니다 (색·굵기를 바꾸려고) */
   onSelect?: (picked: { id: string; name: string } | null) => void;
+  /** 하나를 다 그렸을 때. 같은 도구를 다시 물리는 데 씁니다 */
+  onDrawEnd?: () => void;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -83,8 +88,20 @@ export function Kline({
   selectRef.current = onSelect;
   /** 지금이 분·시간봉인가 — 날짜에 시각을 붙일지 정할 때 씁니다 */
   const intradayRef = useRef(false);
+  /** 아직 다 못 그린 도형의 id */
+  const pendingRef = useRef<string | null>(null);
+  const drawEndRef = useRef(onDrawEnd);
+  drawEndRef.current = onDrawEnd;
+
+  /** 그리다 만 도형을 물립니다 */
+  const cancelPending = () => {
+    const id = pendingRef.current;
+    if (!id) return;
+    pendingRef.current = null;
+    chartRef.current?.removeOverlay({ id });
+    drawnRef.current = drawnRef.current.filter((x) => x !== id);
+  };
   const drawnRef = useRef<string[]>([]);
-  const indicatorsRef = useRef<Map<string, string>>(new Map());
   const cleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -245,6 +262,8 @@ export function Kline({
        * 클릭해서 고르면 알려 주도록 `onSelected` 도 같이 겁니다 — 그래야
        * 이미 그은 선의 색을 나중에 바꿀 수 있습니다.
        */
+      // 아직 안 끝난 도형이 있으면 먼저 물립니다 — 반쯤 그린 게 남지 않게
+      cancelPending();
       const id = chartRef.current?.createOverlay({
         name,
         styles: penStyles(pen),
@@ -260,9 +279,28 @@ export function Kline({
           selectRef.current?.(null);
           return false;
         },
+        /*
+         * 하나를 다 그리면 **같은 도구를 곧바로 다시 물립니다.**
+         *
+         * 그러지 않으면 한 번 그릴 때마다 도구가 풀려서, 다음 선을 그으려고
+         * 끌면 화면만 움직입니다. 도구를 다시 눌러야 하는 걸 모르면 "그리기가
+         * 안 된다"고 느낍니다. 트레이딩뷰도 도구를 물려 두는 쪽입니다.
+         *
+         * 곧바로 부르면 지금 끝나는 도형 처리 중에 끼어들게 되므로 한 박자
+         * 뒤로 미룹니다.
+         */
+        onDrawEnd: () => {
+          pendingRef.current = null;
+          setTimeout(() => drawEndRef.current?.(), 0);
+          return false;
+        },
       });
-      if (typeof id === "string") drawnRef.current.push(id);
+      if (typeof id === "string") {
+        drawnRef.current.push(id);
+        pendingRef.current = id;
+      }
     },
+    cancelDraw: cancelPending,
     restyle(id, pen) {
       chartRef.current?.overrideOverlay({ id, styles: penStyles(pen) });
     },
@@ -279,17 +317,30 @@ export function Kline({
     toggleIndicator(name, onCandle) {
       const chart = chartRef.current;
       if (!chart) return false;
-      const existing = indicatorsRef.current.get(name);
-      if (existing) {
-        chart.removeIndicator({ paneId: existing, name });
-        indicatorsRef.current.delete(name);
+
+      /*
+       * 지금 붙어 있는지 **차트에 직접 물어봅니다.**
+       *
+       * 예전에는 우리가 따로 적어 뒀는데, `createIndicator` 가 돌려주는 값을
+       * paneId 로 잘못 알고 저장했습니다. 실제로는 **지표 id** 입니다. 그래서
+       * 지울 때 `{paneId: 지표id}` 로 찾게 되어 아무것도 안 지워졌고,
+       * 적어 둔 것도 비어 있어서 다시 누르면 **같은 지표가 하나 더** 붙었습니다.
+       * (거래량을 세 번 누르면 판이 두 개가 됐습니다.)
+       *
+       * 차트에 물어보면 우리가 세는 일 자체가 없어지므로 어긋날 수가 없고,
+       * 이미 중복으로 붙어 있던 것도 이번에 같이 정리됩니다.
+       */
+      const existing = chart.getIndicators({ name });
+      if (existing.length > 0) {
+        for (const ind of existing) chart.removeIndicator({ id: ind.id });
         return false;
       }
-      const paneId = chart.createIndicator(
+
+      // 이동평균·볼린저는 캔들 위에, 나머지는 아래 판에 따로 그립니다
+      chart.createIndicator(
         onCandle ? { name, paneId: "candle_pane" } : name,
         true,
       );
-      if (typeof paneId === "string") indicatorsRef.current.set(name, paneId);
       return true;
     },
     setFutureSpace(px) {

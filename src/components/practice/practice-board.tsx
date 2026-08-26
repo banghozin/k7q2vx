@@ -247,6 +247,8 @@ export function PracticeBoard() {
   const newRound = useCallback(async () => {
     setPhase("loading");
     setTool(null);
+    toolRef.current = null;
+    setPicked(null);
     setPanelOpen(false);
     setLogOpen(false);
     setSaved(false);
@@ -469,29 +471,90 @@ export function PracticeBoard() {
     chart.current?.fitAll(feed.length);
   }, [feed.length]);
 
+  /*
+   * 도구를 물리고 푸는 곳.
+   *
+   * **한 번 고르면 계속 물려 있습니다.** 하나 다 그리면 곧바로 같은 도구가
+   * 다시 물립니다(kline 의 onDrawEnd). 그러지 않으면 그릴 때마다 도구가 풀려서
+   * 다음에 끌면 화면만 움직이고, 그걸 모르면 "그리기가 안 된다"고 느낍니다.
+   * 같은 단추를 다시 누르면 풉니다.
+   */
+  const penRef = useRef({ color: penColor, size: penSize });
+  penRef.current = { color: penColor, size: penSize };
+  const toolRef = useRef<string | null>(null);
+
+  const armTool = useCallback(
+    (key: string) => {
+      if (toolRef.current === key) {
+        toolRef.current = null;
+        setTool(null);
+        chart.current?.cancelDraw();
+        return;
+      }
+      toolRef.current = key;
+      setTool(key);
+      chart.current?.startDraw(key, penRef.current);
+      setTimeout(refreshDrawings, 400);
+    },
+    [refreshDrawings],
+  );
+
+  /** 하나 다 그렸을 때 — 같은 도구를 다시 물립니다 */
+  const handleDrawEnd = useCallback(() => {
+    refreshDrawings();
+    const key = toolRef.current;
+    if (key) chart.current?.startDraw(key, penRef.current);
+  }, [refreshDrawings]);
+
   const undo = useCallback(() => {
     chart.current?.undo();
     setPicked(null);
     refreshDrawings();
   }, [refreshDrawings]);
 
+  /** 클릭해서 고른 것을 지웁니다 */
+  const removePicked = useCallback(() => {
+    if (!picked) return;
+    chart.current?.removeDrawing(picked.id);
+    setPicked(null);
+    refreshDrawings();
+  }, [picked, refreshDrawings]);
+
   /*
-   * PC 에서는 Ctrl+Z(맥은 ⌘Z)로도 되돌립니다. 그림을 그리다 보면 손이 먼저
-   * 그리로 갑니다. 글자를 치는 칸에 있을 때는 가로채지 않습니다 — 메모를
-   * 쓰다가 되돌리기가 걸리면 곤란합니다.
+   * 키보드.
+   *   Ctrl+Z (맥 ⌘Z)  마지막에 그린 것 되돌리기
+   *   Delete / ⌫      클릭해서 고른 것 지우기
+   *   Esc             그리기 도구 풀기
+   *
+   * 글자를 치는 칸에 있을 때는 가로채지 않습니다 — 메모를 쓰다가 되돌리기나
+   * 지우기가 걸리면 곤란합니다.
    */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z") return;
       const el = e.target as HTMLElement | null;
       const tag = el?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || el?.isContentEditable) return;
-      e.preventDefault();
-      undo();
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        undo();
+        return;
+      }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (!picked) return;
+        e.preventDefault();
+        removePicked();
+        return;
+      }
+      if (e.key === "Escape") {
+        toolRef.current = null;
+        setTool(null);
+        chart.current?.cancelDraw();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undo]);
+  }, [undo, picked, removePicked]);
 
   /** 고른 것의 색·굵기를 바꿉니다. 아무것도 안 골랐으면 다음에 그릴 펜만 바꿉니다 */
   const applyPen = useCallback(
@@ -641,11 +704,26 @@ export function PracticeBoard() {
                 </button>
               ))}
             </div>
-            <p className="prac__penhint">
-              {picked
-                ? "고른 선에 바로 적용됩니다. 빈 곳을 누르면 선택이 풀립니다."
-                : "그려 둔 선을 눌러 고르면 그 선의 색·굵기를 바꿉니다."}
-            </p>
+            {picked ? (
+              <>
+                <button
+                  type="button"
+                  className="btn btn--ghost prac__del"
+                  onClick={removePicked}
+                >
+                  선택한 것 지우기 <kbd>Del</kbd>
+                </button>
+                <p className="prac__penhint">
+                  색·굵기는 고른 선에 바로 적용됩니다. 빈 곳을 누르면 선택이
+                  풀립니다.
+                </p>
+              </>
+            ) : (
+              <p className="prac__penhint">
+                그려 둔 선을 <strong>누르면</strong> 색·굵기를 바꾸거나 지울 수
+                있습니다.
+              </p>
+            )}
           </section>
 
           {DRAW_GROUPS.map((g) => (
@@ -660,14 +738,8 @@ export function PracticeBoard() {
                     aria-pressed={tool === t.key}
                     title={t.hint}
                     onClick={() => {
-                      setTool(t.key);
-                      chart.current?.startDraw(t.key, {
-                        color: penColor,
-                        size: penSize,
-                      });
+                      armTool(t.key);
                       setPanelOpen(false);
-                      // 그리고 나면 목록이 바뀌므로 조금 뒤 새로고침합니다
-                      setTimeout(refreshDrawings, 400);
                     }}
                   >
                     {t.label}
@@ -826,6 +898,7 @@ export function PracticeBoard() {
             ref={chart}
             onReady={() => setChartReady(true)}
             onSelect={setPicked}
+            onDrawEnd={handleDrawEnd}
           />
           {logOpen && <PracticeLog onClose={() => setLogOpen(false)} />}
         </main>

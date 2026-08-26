@@ -54,19 +54,34 @@ const BARE_TEXT = {
 
 const FIB = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
 
-/** 구간마다 깔 옅은 색의 진하기. 가운데(38.2~61.8)가 조금 진합니다 */
-const BAND_ALPHA = [0.05, 0.07, 0.09, 0.09, 0.07, 0.05];
-
 /**
- * 고른 색을 아주 옅게 깔아 구간을 구분합니다.
- * 색을 직접 고를 수 있게 되면서 고정 rgba 를 못 쓰게 되어 만든 것입니다.
+ * 눈금마다 **다른 색**을 씁니다.
+ *
+ * 처음에는 한 가지 색을 진하기만 달리해 깔았는데, 눈금 여섯이 다 비슷해 보여
+ * "지금 이게 38.2 인지 61.8 인지" 를 색으로 못 알아봤습니다. 트레이딩뷰가
+ * 눈금마다 색을 나눠 쓰는 이유가 그것입니다.
+ *
+ * 색은 이 사이트가 이미 쓰는 팔레트에서 골랐고, 캔들의 빨강·파랑과는
+ * 겹치지 않게 했습니다 — 상승·하락으로 잘못 읽히면 안 되니까요.
+ * 가장 많이 보는 61.8 을 가장 눈에 띄는 하늘색으로 뒀습니다.
  */
-function bandOf(hex: string, i: number): string {
-  const a = BAND_ALPHA[i] ?? 0.06;
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return `rgba(200,161,90,${a})`; // 알아볼 수 없으면 기본 황동색
-  const n = Number.parseInt(m[1], 16);
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+const LEVEL_COLOR: Record<string, string> = {
+  "0": "#b3ada2", // 기준선 — 돌빛
+  "0.236": "#d97fb8", // 자주
+  "0.382": "#f0a23c", // 주황
+  "0.5": "#7fa86b", // 풀색
+  "0.618": "#5bc8d6", // 하늘 — 가장 많이 보는 자리
+  "0.786": "#9b8ec4", // 연보라
+  "1": "#b3ada2", // 기준선 — 돌빛
+};
+
+const colorOf = (r: number) => LEVEL_COLOR[String(r)] ?? GOLD;
+
+/** 구간을 채울 색 — 그 구간 위쪽 눈금의 색을 아주 옅게 */
+function bandOf(i: number): string {
+  const hex = colorOf(FIB[i + 1] ?? FIB[i]);
+  const n = Number.parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},0.07)`;
 }
 
 export const fibRetracement: OverlayTemplate = {
@@ -113,7 +128,7 @@ export const fibRetracement: OverlayTemplate = {
             { x: left, y: y2 },
           ],
         },
-        styles: { style: "fill", color: bandOf(pen.color, i) },
+        styles: { style: "fill", color: bandOf(i) },
         ignoreEvent: true,
       });
     }
@@ -147,8 +162,9 @@ export const fibRetracement: OverlayTemplate = {
           ],
         },
         styles: {
-          color: isEdge ? INK : pen.color,
-          size: isEdge ? Math.max(1.2, pen.size * 0.9) : Math.max(0.8, pen.size * 0.65),
+          // 눈금마다 제 색. 양 끝만 실선으로 두어 구간의 시작·끝이 분명하게
+          color: colorOf(r),
+          size: isEdge ? Math.max(1.3, pen.size * 0.9) : Math.max(0.9, pen.size * 0.7),
           style: isEdge ? "solid" : "dashed",
         },
       });
@@ -166,7 +182,7 @@ export const fibRetracement: OverlayTemplate = {
           align: "left",
           baseline: "bottom",
         },
-        styles: { ...BARE_TEXT, color: isEdge ? INK : MUTED, size: 10 },
+        styles: { ...BARE_TEXT, color: colorOf(r), size: 10, weight: isEdge ? "bold" : "normal" },
         ignoreEvent: true,
       });
     }
