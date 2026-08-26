@@ -2337,8 +2337,17 @@ tbody tr:hover {
     gap: 0;
   }
 
+  /*
+   * 390px 에서 이름표와 메뉴 넷을 합치면 18px 쯤 넘쳐 "읽는 법" 이 잘려
+   * 보였습니다. 옆으로 밀어 볼 수는 있지만 첫 화면에서 글자가 잘리면
+   * 만들다 만 것처럼 보입니다. 간격과 좌우 여백만 줄여 한 줄에 넣습니다.
+   */
+  .masthead__bar {
+    gap: 0.5rem;
+  }
+
   .navlink {
-    padding: 0.35rem 0.5rem;
+    padding: 0.35rem 0.35rem;
     font-size: 0.8rem;
   }
 
@@ -2371,6 +2380,75 @@ tbody tr:hover {
 
   .hero__title {
     max-width: none;
+  }
+
+  /*
+   * 손가락 크기 맞추기.
+   *
+   * 좁은 화면에서 실제로 눌러 이동하거나 무언가를 여는 것들만 44px 로
+   * 올립니다. 두 가지는 일부러 두었습니다.
+   *   - 문장 안에 섞인 링크: 키우면 줄바꿈이 깨져 글이 읽기 나빠집니다
+   *   - 태그 칩: 촘촘히 붙어 있어 키우면 옆 칩의 자리를 뺏습니다.
+   *     28px 이라 접근성 최소치(24px)는 넘습니다
+   */
+  .navlink {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .brand {
+    padding-block: 0.45rem; /* 30px + 14px = 44px. 기준선 정렬은 그대로 */
+  }
+
+  .foot li > a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .segmented button,
+  .btn {
+    min-height: 44px;
+  }
+
+  /* 숫자를 직접 치는 칸 — 26px 은 손가락으로 겨냥하기 어렵습니다 */
+  .readout__value input {
+    min-height: 44px;
+  }
+
+  /*
+   * 티커 단추는 카드 머리에 있어 키우면 카드 42장이 전부 길어집니다.
+   * 그래서 보이는 크기는 두고 **눌리는 범위만** 위아래로 넓힙니다.
+   */
+  .specimen__ticker,
+  td button.mono,
+  .syncbar__lead button.mono {
+    position: relative;
+  }
+
+  .specimen__ticker::after,
+  td button.mono::after,
+  .syncbar__lead button.mono::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+  }
+
+  .specimen__ticker::after {
+    top: -9px; /* 27px + 17px */
+    bottom: -8px;
+  }
+
+  .syncbar__lead button.mono::after {
+    top: -7px; /* 30px + 14px */
+    bottom: -7px;
+  }
+
+  td button.mono::after {
+    top: -11px; /* 23px + 21px */
+    bottom: -10px;
   }
 }
 

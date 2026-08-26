@@ -182,15 +182,34 @@ export function PracticeBoard() {
     }));
   }, [round, shown]);
 
+  // 앞날을 그릴 빈 자리는 아직 안 연 구간에서만 넓게 둡니다
+  const futureSpace =
+    phase === "draw" ? FUTURE_SPACE : Math.max(40, FUTURE_SPACE - shown * 6);
+
   useEffect(() => {
     if (chartReady && feed.length) {
       chart.current?.setData(feed);
-      // 앞날을 그릴 빈 자리는 아직 안 연 구간에서만 넓게 둡니다
-      chart.current?.setFutureSpace(
-        phase === "draw" ? FUTURE_SPACE : Math.max(40, FUTURE_SPACE - shown * 6),
-      );
+      chart.current?.setFutureSpace(futureSpace);
     }
-  }, [chartReady, feed, phase, shown]);
+  }, [chartReady, feed, futureSpace]);
+
+  /*
+   * 새 문제를 열 때 화면 폭에 맞는 봉 수로 맞춥니다.
+   *
+   * 봉 간격을 고정해 두면 넓은 화면에서는 180봉이 잘 들어오지만 휴대폰에서는
+   * 스무 개 남짓만 보여 분석 자체가 불가능합니다. 반대로 좁은 화면에 180봉을
+   * 다 우겨넣으면 봉 하나가 1px 이 되어 이번엔 선을 그을 수가 없습니다.
+   * 그래서 좁으면 최근 70봉만 보여 줍니다 — 일봉 기준 석 달 남짓입니다.
+   *
+   * 봉 간격을 바꾸면 오른쪽 빈 자리가 초기화되므로 **맞춘 뒤 다시** 줍니다.
+   */
+  useEffect(() => {
+    if (!chartReady || !round) return;
+    const w = chart.current?.width() ?? 0;
+    if (w === 0) return;
+    chart.current?.fitAll(w < 640 ? 70 : VISIBLE);
+    chart.current?.setFutureSpace(futureSpace);
+  }, [chartReady, round]);
 
   /* ── 실제와 대조 ─────────────────────────────────────────────── */
 

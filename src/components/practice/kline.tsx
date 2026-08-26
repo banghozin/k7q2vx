@@ -46,6 +46,8 @@ export type KlineHandle = {
    * 검증 중에 실제로 ①~⑤ 라벨이 통째로 사라져 보였습니다.
    */
   fitAll: (barCount: number) => void;
+  /** 지금 차트가 차지한 가로 폭 — 화면 크기에 맞춰 봉 수를 정할 때 씁니다 */
+  width: () => number;
 };
 
 export function Kline({
@@ -222,7 +224,14 @@ export function Kline({
       return true;
     },
     setFutureSpace(px) {
-      chartRef.current?.setOffsetRightDistance(px);
+      /*
+       * 좁은 화면에서 260px 를 그대로 비우면 폭 390px 중 가격축 70px 을 빼고
+       * 봉이 설 자리가 60px 밖에 안 남습니다. 실제로 휴대폰에서 봉 스무 개만
+       * 보였습니다. 그래서 **폭의 3분의 1**을 넘지 않게 묶습니다.
+       */
+      const box = boxRef.current;
+      const cap = box ? box.clientWidth * 0.34 : px;
+      chartRef.current?.setOffsetRightDistance(Math.min(px, cap));
     },
     setDrawingsVisible(visible) {
       const chart = chartRef.current;
@@ -259,6 +268,9 @@ export function Kline({
       // 오른쪽 가격축과 앞날 여백을 뺀 폭을 봉 수로 나눕니다
       const usable = box.clientWidth - 70 - chart.getOffsetRightDistance();
       chart.setBarSpace(Math.max(1.5, usable / barCount));
+    },
+    width() {
+      return boxRef.current?.clientWidth ?? 0;
     },
   }));
 

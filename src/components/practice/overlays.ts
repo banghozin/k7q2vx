@@ -97,6 +97,23 @@ export const fibRetracement: OverlayTemplate = {
       });
     }
 
+    /*
+     * 좁은 구간을 잡으면 눈금 일곱 개가 한 뼘에 몰려 라벨이 서로 포개집니다.
+     * 그래서 **선은 전부 긋되 라벨만 솎아냅니다.** 양 끝(0·100%)은 구간이
+     * 어디서 어디까지인지 알려 주므로 항상 남기고, 중간은 실제로 많이 보는
+     * 61.8 → 38.2 → 50 → 23.6 → 78.6 순으로 자리가 남을 때만 붙입니다.
+     */
+    const MIN_LABEL_GAP = 13;
+    const labelled = new Set<number>([0, 1]);
+    const takenY = [yOf(0), yOf(1)];
+    for (const r of [0.618, 0.382, 0.5, 0.236, 0.786]) {
+      const y = yOf(r);
+      if (takenY.every((t) => Math.abs(y - t) >= MIN_LABEL_GAP)) {
+        labelled.add(r);
+        takenY.push(y);
+      }
+    }
+
     for (const r of FIB) {
       const y = yOf(r);
       const isEdge = r === 0 || r === 1;
@@ -116,9 +133,9 @@ export const fibRetracement: OverlayTemplate = {
       });
       /*
        * 라벨은 구간 **안쪽 왼쪽 위**에 붙입니다. 오른쪽 끝에 두면 가격축과
-       * 겹치고, 비율이 촘촘한 구간(38.2·50·61.8)에서 서로 포개집니다.
-       * 선 바로 위에 얹으면 어느 선의 값인지도 분명해집니다.
+       * 겹치고, 선 바로 위에 얹으면 어느 선의 값인지도 분명해집니다.
        */
+      if (!labelled.has(r)) continue;
       figures.push({
         type: "text",
         attrs: {
