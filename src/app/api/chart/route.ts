@@ -9,9 +9,27 @@
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
 
-const OK_INTERVAL = new Set(["1d", "1wk"]);
-// 훈련 화면은 과거로 거슬러 올라가야 해서 긴 구간이 필요합니다
-const OK_RANGE = new Set(["1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "max"]);
+/*
+ * 훈련 화면에서 봉 단위를 고를 수 있어야 해서 분봉부터 월봉까지 엽니다.
+ *
+ * 야후는 짧은 봉일수록 보관 기간이 짧습니다 — 분봉은 두 달, 60분봉은 두 해,
+ * 일봉 이상은 전 기간입니다. 4시간봉은 야후가 주지 않아 60분봉을 넷씩 묶어
+ * 화면에서 만듭니다.
+ */
+const OK_INTERVAL = new Set(["5m", "15m", "30m", "60m", "1d", "1wk", "1mo"]);
+const OK_RANGE = new Set([
+  "1mo",
+  "3mo",
+  "6mo",
+  "1y",
+  "2y",
+  "5y",
+  "10y",
+  "max",
+  "7d",
+  "60d",
+  "730d",
+]);
 
 type YahooChart = {
   chart: {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useImperativeHandle, useRef } from "react";
-import type { Chart, KLineData } from "klinecharts";
+import type { Chart, KLineData, Period } from "klinecharts";
 
 /**
  * KLineChart 을 감싼 조각.
@@ -16,8 +16,8 @@ import type { Chart, KLineData } from "klinecharts";
 export type Pen = { color: string; size: number };
 
 export type KlineHandle = {
-  /** 봉 데이터를 통째로 갈아끼웁니다 */
-  setData: (bars: KLineData[]) => void;
+  /** 봉 데이터를 통째로 갈아끼웁니다. 봉 단위도 함께 알려 줍니다 */
+  setData: (bars: KLineData[], period: Period) => void;
   /** 그리기 도구를 켭니다. 지금 고른 펜으로 그립니다 */
   startDraw: (name: string, pen: Pen) => void;
   /** 이미 그린 것 하나의 색·굵기를 바꿉니다 */
@@ -81,6 +81,8 @@ export function Kline({
   // 나중 렌더의 것을 가리키게 하려는 것입니다
   const selectRef = useRef(onSelect);
   selectRef.current = onSelect;
+  /** 지금이 분·시간봉인가 — 날짜에 시각을 붙일지 정할 때 씁니다 */
+  const intradayRef = useRef(false);
   const drawnRef = useRef<string[]>([]);
   const indicatorsRef = useRef<Map<string, string>>(new Map());
   const cleanupRef = useRef<(() => void) | null>(null);
@@ -184,7 +186,10 @@ export function Kline({
         formatDate: ({ timestamp }) => {
           const d = new Date(timestamp);
           const p = (n: number) => String(n).padStart(2, "0");
-          return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
+          const day = `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
+          if (!intradayRef.current) return day;
+          // 분·시간봉은 시각이 있어야 어느 봉인지 알 수 있습니다
+          return `${day} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
         },
       });
 
@@ -220,11 +225,13 @@ export function Kline({
   }, []);
 
   useImperativeHandle(ref, () => ({
-    setData(bars) {
+    setData(bars, period) {
       const chart = chartRef.current;
       if (!chart) return;
+      // 분·시간봉이면 축과 십자선에 시각까지 보여야 합니다
+      intradayRef.current = period.type === "minute" || period.type === "hour";
       chart.setSymbol({ ticker: "PRACTICE" });
-      chart.setPeriod({ type: "day", span: 1 });
+      chart.setPeriod(period);
       chart.setDataLoader({
         getBars: ({ callback }) => callback(bars, false),
       });

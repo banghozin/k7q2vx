@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { KLineData } from "klinecharts";
+import type { KLineData, Period } from "klinecharts";
 import { allTickers, nameOf } from "@/data/themes";
 import { pct, tone } from "@/lib/format";
 import { usePractice } from "@/lib/store/practice-store";
@@ -36,16 +36,56 @@ type Bar = {
   volume: number;
 };
 
-/** 처음에 보여줄 봉 개수 */
-const VISIBLE = 180;
 /**
- * 가린 뒤 열어볼 수 있는 최대 봉 개수.
+ * 봉 단위.
  *
- * 60봉(석 달)은 "그래서 어떻게 됐나"를 보기에 짧았습니다. 내가 그은 추세선이
- * 결국 지켜졌는지, 파동이 어디서 끝났는지는 **반년쯤** 지나야 모양이 납니다.
- * 그래서 120봉으로 늘렸습니다.
+ * 야후는 짧은 봉일수록 보관 기간이 짧습니다. 그리고 `range=max` 를 주면 봉
+ * 단위와 무관하게 **월봉으로 뭉개져서** 나옵니다(직접 확인). 그래서 단위마다
+ * 실제로 잘 나오는 구간을 정해 두었습니다.
+ *
+ * 4시간봉은 야후가 주지 않습니다. 60분봉을 넷씩 묶어 화면에서 만듭니다.
  */
-const FORWARD = 120;
+const TIMEFRAMES: {
+  key: string;
+  label: string;
+  interval: string;
+  range: string;
+  /** 몇 개를 하나로 묶을지 (1 이면 그대로) */
+  group: number;
+  /** 이 단위로 한 판을 만들려면 최소 몇 봉이 있어야 하는지 */
+  need: number;
+  /** klinecharts 에 알려 줄 봉 단위 (축 눈금·시각 표기가 여기 따라갑니다) */
+  period: Period;
+}[] = [
+  { key: "5m", label: "5분", interval: "5m", range: "60d", group: 1, need: 600, period: { type: "minute", span: 5 } },
+  { key: "15m", label: "15분", interval: "15m", range: "60d", group: 1, need: 500, period: { type: "minute", span: 15 } },
+  { key: "30m", label: "30분", interval: "30m", range: "60d", group: 1, need: 400, period: { type: "minute", span: 30 } },
+  { key: "60m", label: "1시간", interval: "60m", range: "730d", group: 1, need: 600, period: { type: "hour", span: 1 } },
+  { key: "4h", label: "4시간", interval: "60m", range: "730d", group: 4, need: 400, period: { type: "hour", span: 4 } },
+  { key: "1d", label: "일봉", interval: "1d", range: "10y", group: 1, need: 600, period: { type: "day", span: 1 } },
+  { key: "1wk", label: "주봉", interval: "1wk", range: "10y", group: 1, need: 260, period: { type: "week", span: 1 } },
+  { key: "1mo", label: "월봉", interval: "1mo", range: "max", group: 1, need: 140, period: { type: "month", span: 1 } },
+];
+
+/**
+ * 처음 화면에 담을 봉 개수.
+ *
+ * **이건 "이만큼만 존재한다"가 아니라 "이만큼이 먼저 보인다" 입니다.**
+ * 처음에는 이 수만큼만 차트에 넣어서, 왼쪽으로 아무리 밀어도 과거가 없었습니다.
+ * 지금은 **가린 시점까지의 전 기간**을 다 넣고 배율만 이 수에 맞춥니다.
+ * 트레이딩뷰처럼 왼쪽으로 끌면 상장 첫날까지 거슬러 올라갑니다.
+ */
+const VISIBLE = 180;
+
+/**
+ * 가린 지점 뒤에 남겨 둘 봉의 범위.
+ *
+ * "정답"은 여기 남은 봉 **전부**입니다. 끝까지 열면 데이터의 마지막 봉,
+ * 곧 가장 최근까지 갑니다. 너무 옛날을 가리면 정답이 몇 년치가 되어 한 화면에
+ * 안 들어오므로 위쪽을 막아 둡니다.
+ */
+const FUTURE_MIN = 120;
+const FUTURE_MAX = 600;
 /** 오른쪽에 앞날을 그릴 빈 자리 (px) */
 const FUTURE_SPACE = 260;
 
@@ -121,6 +161,28 @@ const WIDTHS: { size: number; label: string }[] = [
   { size: 3.5, label: "굵게" },
 ];
 
+/**
+ * 봉 여러 개를 하나로 묶습니다 (4시간봉을 만들 때만 씁니다).
+ * 시가는 첫 봉, 종가는 마지막 봉, 고가·저가는 최대·최소, 거래량은 합입니다.
+ */
+function groupBars(bars: Bar[], n: number): Bar[] {
+  if (n <= 1) return bars;
+  const out: Bar[] = [];
+  for (let i = 0; i < bars.length; i += n) {
+    const g = bars.slice(i, i + n);
+    if (g.length === 0) continue;
+    out.push({
+      time: g[0].time,
+      open: g[0].open,
+      high: Math.max(...g.map((b) => b.high)),
+      low: Math.min(...g.map((b) => b.low)),
+      close: g[g.length - 1].close,
+      volume: g.reduce((s, b) => s + b.volume, 0),
+    });
+  }
+  return out;
+}
+
 type Phase = "loading" | "draw" | "reveal" | "error";
 
 type Round = {
@@ -129,12 +191,24 @@ type Round = {
   bars: Bar[];
   /** 가린 지점 — bars[cut-1] 까지 보여줍니다 */
   cut: number;
+  /** 이 판을 만든 봉 단위 */
+  tf: string;
 };
 
 const fmtDate = new Intl.DateTimeFormat("ko-KR", {
   year: "numeric",
   month: "2-digit",
   day: "2-digit",
+  timeZone: "UTC",
+});
+
+/** 분·시간봉용 — 몇 시까지 보고 그렸는지 */
+const fmtStamp = new Intl.DateTimeFormat("ko-KR", {
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
   timeZone: "UTC",
 });
 
@@ -159,9 +233,15 @@ export function PracticeBoard() {
   );
   /** 같은 판을 두 번 저장하지 않게 */
   const [saved, setSaved] = useState(false);
+  /** 고른 봉 단위. 바꾸면 그 단위로 새 판을 뽑습니다 */
+  const [tfKey, setTfKey] = useState("1d");
 
   const sessions = usePractice((s) => s.sessions);
   const addSession = usePractice((s) => s.add);
+
+  const tfNow = TIMEFRAMES.find((t) => t.key === tfKey) ?? TIMEFRAMES[5];
+  const intraday =
+    tfNow.period.type === "minute" || tfNow.period.type === "hour";
 
   /* ── 한 판 새로 뽑기 ─────────────────────────────────────────── */
   const newRound = useCallback(async () => {
@@ -174,29 +254,36 @@ export function PracticeBoard() {
     chart.current?.clearDrawings();
     setDrawings([]);
 
+    const tf = TIMEFRAMES.find((t) => t.key === tfKey) ?? TIMEFRAMES[5];
     const pool = allTickers();
     // 여러 번 시도합니다 — 상장이 짧은 종목은 훈련에 쓸 수 없습니다
-    for (let attempt = 0; attempt < 6; attempt++) {
+    for (let attempt = 0; attempt < 8; attempt++) {
       const ticker = pool[Math.floor(Math.random() * pool.length)];
       try {
         const r = await fetch(
-          `/api/chart?ticker=${encodeURIComponent(ticker)}&interval=1d&range=10y`,
+          `/api/chart?ticker=${encodeURIComponent(ticker)}&interval=${tf.interval}&range=${tf.range}`,
         );
         if (!r.ok) continue;
         const j = (await r.json()) as { candles: Bar[] };
-        const bars = j.candles ?? [];
-        if (bars.length < VISIBLE + FORWARD + 40) continue;
+        const bars = groupBars(j.candles ?? [], tf.group);
+        if (bars.length < tf.need) continue;
 
-        // 가릴 지점을 무작위로 고릅니다. 뒤로 FORWARD 개는 남겨 둡니다.
-        const min = VISIBLE;
-        const max = bars.length - FORWARD;
-        const cut = min + Math.floor(Math.random() * Math.max(1, max - min));
+        /*
+         * 가릴 지점을 고릅니다. 뒤로 남는 봉이 곧 "정답" 이므로 FUTURE_MIN ~
+         * FUTURE_MAX 사이가 되게 잡습니다. 앞쪽은 남는 전부가 과거로 들어갑니다.
+         */
+        const back =
+          FUTURE_MIN +
+          Math.floor(Math.random() * (FUTURE_MAX - FUTURE_MIN + 1));
+        const cut = bars.length - Math.min(back, bars.length - 120);
+        if (cut < 120) continue; // 과거가 너무 짧으면 훈련이 안 됩니다
 
         setRound({
           ticker,
           name: nameOf(ticker) ?? ticker,
           bars,
           cut,
+          tf: tf.key,
         });
         setShown(0);
         setPhase("draw");
@@ -206,17 +293,25 @@ export function PracticeBoard() {
       }
     }
     setPhase("error");
-  }, []);
+  }, [tfKey]);
 
   useEffect(() => {
     void newRound();
   }, [newRound]);
 
   /* ── 차트에 넣을 봉 ──────────────────────────────────────────── */
+  /**
+   * **가린 지점까지의 전 기간을 다 넣습니다.**
+   *
+   * 예전에는 최근 180봉만 넣어서, 왼쪽으로 아무리 밀어도 과거가 나오지
+   * 않았습니다("차트 연습할 땐 과거까지 전부 나와야지"). 데이터 자체를 안
+   * 넣어 줬으니 당연한 일이었습니다. 지금은 전부 넣고 **배율만** 처음에
+   * 180봉에 맞춥니다 — 밀면 상장 첫날까지 갑니다.
+   */
   const feed: KLineData[] = useMemo(() => {
     if (!round) return [];
     const end = round.cut + shown;
-    return round.bars.slice(Math.max(0, round.cut - VISIBLE), end).map((b) => ({
+    return round.bars.slice(0, end).map((b) => ({
       timestamp: b.time * 1000,
       open: b.open,
       high: b.high,
@@ -226,13 +321,16 @@ export function PracticeBoard() {
     }));
   }, [round, shown]);
 
+  /** 이 판에서 열어볼 수 있는 봉 수 = 가린 지점 뒤에 남은 전부 (= 최신까지) */
+  const maxForward = round ? round.bars.length - round.cut : 0;
+
   // 앞날을 그릴 빈 자리는 아직 안 연 구간에서만 넓게 둡니다
   const futureSpace =
     phase === "draw" ? FUTURE_SPACE : Math.max(40, FUTURE_SPACE - shown * 6);
 
   useEffect(() => {
     if (chartReady && feed.length) {
-      chart.current?.setData(feed);
+      chart.current?.setData(feed, tfNow.period);
       chart.current?.setFutureSpace(futureSpace);
     }
   }, [chartReady, feed, futureSpace]);
@@ -347,7 +445,7 @@ export function PracticeBoard() {
 
   function reveal(steps: number) {
     setPhase("reveal");
-    setShown((s) => Math.min(FORWARD, Math.max(s, steps)));
+    setShown((s) => Math.min(maxForward, Math.max(s, steps)));
     if (phase === "draw") setRounds((r) => r + 1);
   }
 
@@ -366,10 +464,10 @@ export function PracticeBoard() {
     setDrawings(chart.current?.listDrawings() ?? []);
   }, []);
 
-  /** 봉 전체가 한 화면에 들어오게 맞춥니다 */
+  /** 지금 들어 있는 봉 **전부**가 한 화면에 들어오게 맞춥니다 */
   const fitAll = useCallback(() => {
-    chart.current?.fitAll(VISIBLE + shown);
-  }, [shown]);
+    chart.current?.fitAll(feed.length);
+  }, [feed.length]);
 
   const undo = useCallback(() => {
     chart.current?.undo();
@@ -405,11 +503,14 @@ export function PracticeBoard() {
     [picked],
   );
 
+  // 분·시간봉이면 몇 시까지 봤는지가 중요합니다
   const cutDate = round
-    ? fmtDate.format(new Date((round.bars[round.cut - 1]?.time ?? 0) * 1000))
+    ? (intraday ? fmtStamp : fmtDate).format(
+        new Date((round.bars[round.cut - 1]?.time ?? 0) * 1000),
+      )
     : "";
 
-  const canStep = round ? shown < FORWARD : false;
+  const canStep = round ? shown < maxForward : false;
 
   /* ── 화면 ────────────────────────────────────────────────────── */
   return (
@@ -431,6 +532,9 @@ export function PracticeBoard() {
         </div>
 
         <div className="prac__stat mono">
+          <span>
+            {TIMEFRAMES.find((t) => t.key === tfKey)?.label ?? "일봉"}
+          </span>
           <span>
             <b>{cutDate}</b> 까지 보임
           </span>
@@ -477,6 +581,31 @@ export function PracticeBoard() {
 
       <div className="prac__body">
         <aside className={`prac__tools${panelOpen ? " is-open" : ""}`}>
+          {/*
+            봉 단위가 맨 위입니다. 단타는 분봉, 스윙은 시간·일봉, 장투는
+            주봉·월봉으로 보게 하려는 것이고, 무엇으로 보느냐가 먼저 정해져야
+            나머지가 의미가 있습니다.
+          */}
+          <section>
+            <h2>봉 단위</h2>
+            <div className="prac__grid">
+              {TIMEFRAMES.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  className="prac__tool"
+                  aria-pressed={tfKey === t.key}
+                  onClick={() => {
+                    if (t.key === tfKey) return;
+                    setTfKey(t.key);
+                  }}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </section>
+
           {/*
             펜은 도구보다 위에 둡니다. 색을 먼저 고르고 그리는 순서가
             자연스럽고, 이미 그은 선을 클릭해 고른 상태면 그 선이 바로
@@ -747,7 +876,7 @@ export function PracticeBoard() {
                 type="button"
                 className="btn btn--ghost"
                 disabled={!canStep}
-                onClick={() => setShown((s) => Math.min(FORWARD, s + 5))}
+                onClick={() => setShown((s) => Math.min(maxForward, s + 5))}
               >
                 5봉 더
               </button>
@@ -755,7 +884,7 @@ export function PracticeBoard() {
                 type="button"
                 className="btn btn--ghost"
                 disabled={!canStep}
-                onClick={() => setShown(FORWARD)}
+                onClick={() => setShown(maxForward)}
               >
                 끝까지
               </button>
