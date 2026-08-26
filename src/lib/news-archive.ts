@@ -68,6 +68,21 @@ export const archiveUpdatedAt: string | null = recentFile?.updatedAt || null;
 
 export const hasArchive = archive.length > 0;
 
+/**
+ * 날짜별로 묶어 돌려줍니다 — 지난 기사를 넘겨 보는 화면용.
+ *
+ * 최신 날짜가 앞에 옵니다. 기사가 하나도 없는 날은 아예 나오지 않습니다.
+ */
+export function newsByDay(): { day: string; items: Archived[] }[] {
+  const map = new Map<string, Archived[]>();
+  for (const a of archive) {
+    map.set(a.day, [...(map.get(a.day) ?? []), a]);
+  }
+  return [...map.entries()]
+    .map(([day, items]) => ({ day, items }))
+    .sort((a, b) => (a.day < b.day ? 1 : -1));
+}
+
 /** 이 종목이 걸린 기사 */
 export function newsForTicker(ticker: string, limit = 8): Archived[] {
   const t = ticker.toUpperCase();

@@ -139,6 +139,16 @@ const US_SIGNALS = [
   "빅테크",
 ];
 
+/** 이 글에 미국 시장 신호가 있는가 */
+export function hasUsSignal(text: string): boolean {
+  return US_SIGNALS.some((s) => text.includes(s));
+}
+
+/** 제목이 국내 시장 상품 얘기인가 */
+export function isDomesticProduct(title: string): boolean {
+  return DOMESTIC.some((d) => title.includes(d));
+}
+
 /**
  * 미국 시장과 관련된 기사만 남깁니다.
  *
@@ -153,9 +163,9 @@ export function usHeadlines(
   const out: NewsItem[] = [];
   for (const it of items) {
     if (it.category !== "economy") continue;
-    if (DOMESTIC.some((d) => it.title.includes(d))) continue;
+    if (isDomesticProduct(it.title)) continue;
     const hay = `${it.title} ${it.description}`;
-    const bySignal = US_SIGNALS.some((s) => hay.includes(s));
+    const bySignal = hasUsSignal(hay);
     const byName = !bySignal && names.some((n) => hasName(hay, n));
     if (!bySignal && !byName) continue;
     out.push(it);

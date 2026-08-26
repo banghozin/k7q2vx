@@ -29,7 +29,7 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { THEMES } from "../src/data/themes";
-import { fetchNews, type NewsItem } from "../src/lib/sbhnews";
+import { fetchNews, hasUsSignal, type NewsItem } from "../src/lib/sbhnews";
 
 const DIR = "src/data/generated/news";
 
@@ -64,6 +64,17 @@ function themesOfTickers(tk: string[]): string[] {
   return [...out];
 }
 
+/**
+ * 미국 시장 기사인가 — 종목이 안 걸린 기사를 남길지 정하는 기준입니다.
+ *
+ * 카테고리가 `economy` 인 것만 봅니다. 외교·사회 기사에도 "미국" 은 흔히
+ * 나오지만 그건 시장 얘기가 아닙니다.
+ */
+function isUsMarket(it: NewsItem): boolean {
+  if (it.category !== "economy") return false;
+  return hasUsSignal(`${it.title} ${it.description}`);
+}
+
 /** 국내 시장 상품 기사는 제외합니다 — 이 사이트는 미국 상장만 다룹니다 */
 const DOMESTIC = [
   "KODEX",
@@ -78,20 +89,27 @@ const DOMESTIC = [
 /**
  * 기사 하나를 보관할지 판단합니다.
  *
- * **종목이 하나라도 걸려야 보관합니다.** 처음엔 테마 키워드로도 걸었는데
- * 결과가 엉망이었습니다 — "반도체" 하나로 국내 부품사 기사가, "보안" 으로
- * 멕시코 치안 기사가, "드론" 으로 우크라이나 전황 기사가 딸려 들어왔습니다.
- * 우리가 이 아카이브로 하려는 일(종목별 뉴스 · 매매노트 진입일 · 차트 표시)은
- * 전부 종목 단위라, 종목이 안 걸린 기사는 애초에 쓸 데가 없습니다.
+ * 두 갈래로 남깁니다.
  *
- * 테마 페이지의 "이 테마에 걸린 기사" 목록은 실시간 피드가 그대로 담당합니다.
+ * 1. **종목 기사** — 우리 종목 이름이 실제로 나온 것. 종목별 뉴스, 매매노트
+ *    진입일, 차트 위 표시에 쓰입니다.
+ * 2. **시장 기사** — 종목은 안 걸렸지만 미국 시장 얘기인 것(연준·나스닥·
+ *    관세 같은). 홈 헤드라인이 여기서 나옵니다.
+ *
+ * 처음엔 1번만 남겼는데, 그러면 홈 헤드라인은 **실시간 피드에만** 의존하게
+ * 됩니다. 그 피드는 최근 100건, 재어 보니 **7.6시간치**밖에 없어서 어제 뭐가
+ * 있었는지 볼 방법이 없었습니다. 지나가면 되찾을 수 없으니 같이 담습니다.
+ *
+ * 테마 키워드로 거는 방식은 쓰지 않습니다 — "보안" 으로 멕시코 치안 기사가,
+ * "조선" 으로 시외버스 요금 기사가 딸려 들어왔습니다.
  */
 function classify(it: NewsItem): Archived | null {
   const text = `${it.title} ${it.description}`;
   if (DOMESTIC.some((d) => it.title.includes(d))) return null;
 
   const tk = [...new Set([...tickersIn(text), ...namesIn(text)])].sort();
-  if (tk.length === 0) return null;
+  // 종목이 안 걸렸으면 미국 시장 기사일 때만 남깁니다
+  if (tk.length === 0 && !isUsMarket(it)) return null;
 
   const th = themesOfTickers(tk).sort();
 

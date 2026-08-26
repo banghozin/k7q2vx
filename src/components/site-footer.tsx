@@ -34,6 +34,9 @@ export function SiteFooter() {
                 </a>
               </li>
               <li>테마–종목 배치 · 직접 큐레이션</li>
+              <li>
+                <a href="/news">뉴스 보관함</a>
+              </li>
             </ul>
           </div>
           <div>

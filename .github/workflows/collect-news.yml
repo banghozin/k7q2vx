@@ -1,0 +1,59 @@
+name: 뉴스 수집
+
+# 공개 피드는 최근 100건만 줍니다. 실제로 재어 보니 **7.6시간치**입니다.
+# 즉 하루 한 번만 모으면 그날 기사의 3분의 1도 못 건집니다.
+#
+# 그래서 6시간마다 돕니다. 6시간 간격이면 7.6시간짜리 창이 서로 겹쳐서
+# 사이가 비지 않습니다. 실행이 조금 밀려도(깃허브 예약은 최대 30분쯤 늦을 수
+# 있습니다) 1.6시간의 여유가 있습니다.
+#
+# 미국 시장 기사는 미국장 시간(대략 UTC 13~21시)에 몰리므로, 그 구간이
+# 두 번(14:11, 20:11) 들어가게 잡았습니다.
+on:
+  schedule:
+    - cron: "11 2,8,14,20 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  # 시세 갱신과 같은 파일(생성 JSON)을 건드리므로 줄을 세웁니다
+  group: update-prices
+  cancel-in-progress: false
+
+jobs:
+  news:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: 기사 모으기
+        run: npm run news
+
+      - name: 바뀐 것이 있으면 커밋
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/data/generated/news/
+          if git diff --staged --quiet; then
+            echo "새 기사가 없습니다. 커밋하지 않습니다."
+            exit 0
+          fi
+          git commit -m "chore(news): 기사 수집 $(date -u +'%Y-%m-%d %H:%M')"
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main && git push origin HEAD:main && exit 0
+            echo "재시도 $i"
+            sleep 5
+          done
+          echo "푸시에 실패했습니다"
+          exit 1
