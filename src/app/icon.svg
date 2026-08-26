@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="테마 지도">
+  <!--
+    지층 단면도.
+
+    이 사이트의 개념이 "산업을 층으로 세운다" 이므로 아이콘도 지층입니다.
+    글자(層)를 넣는 방법도 있었지만 16px 로 줄면 뭉개지고, 기기마다 한자
+    글꼴이 없을 수 있어 도형으로 그렸습니다.
+
+    아래로 갈수록 넓고 어둡게(원재료), 위로 갈수록 좁고 밝게(최종 서비스).
+    맨 위 한 층만 황동색으로 두어 "지금 앞선 층" 을 나타냅니다.
+  -->
+  <rect width="64" height="64" rx="12" fill="#0a0c0f" />
+  <g>
+    <rect x="10" y="43" width="44" height="8" rx="2" fill="#2b3038" />
+    <rect x="13" y="33" width="38" height="8" rx="2" fill="#3a424d" />
+    <rect x="16" y="23" width="32" height="8" rx="2" fill="#5a6472" />
+    <rect x="19" y="13" width="26" height="8" rx="2" fill="#c8a15a" />
+  </g>
+</svg>

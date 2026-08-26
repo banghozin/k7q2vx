@@ -55,6 +55,23 @@ export type KlineHandle = {
   fitAll: (barCount: number) => void;
   /** 지금 차트가 차지한 가로 폭 — 화면 크기에 맞춰 봉 수를 정할 때 씁니다 */
   width: () => number;
+  /** 그려 둔 것을 저장할 수 있는 모양으로 꺼냅니다 */
+  exportDrawings: () => SavedDrawing[];
+  /** 저장해 둔 것을 도로 그립니다 */
+  importDrawings: (list: SavedDrawing[]) => void;
+};
+
+/**
+ * 저장해 두는 그림 하나.
+ *
+ * 화면 좌표(px)가 아니라 **시각과 가격**으로 적습니다. 그래야 나중에 확대·축소
+ * 하거나 창 크기가 달라져도 같은 자리에 다시 그려집니다.
+ */
+export type SavedDrawing = {
+  name: string;
+  points: { timestamp?: number; value?: number }[];
+  color: string;
+  size: number;
 };
 
 /** 펜 하나를 klinecharts 가 아는 모양으로 바꿉니다 */
@@ -391,6 +408,56 @@ export function Kline({
     },
     width() {
       return boxRef.current?.clientWidth ?? 0;
+    },
+    exportDrawings() {
+      const chart = chartRef.current;
+      if (!chart) return [];
+      const pending = pendingRef.current;
+      return chart
+        .getOverlays()
+        // 그리다 만 것은 저장하지 않습니다
+        .filter((o) => o.id !== pending && (o.points?.length ?? 0) > 0)
+        .map((o) => {
+          const line = (
+            o.styles as { line?: { color?: string; size?: number } } | undefined
+          )?.line;
+          return {
+            name: o.name,
+            points: (o.points ?? []).map((p) => ({
+              timestamp: p.timestamp,
+              value: p.value,
+            })),
+            color: line?.color ?? "#c8a15a",
+            size: line?.size ?? 2,
+          };
+        });
+    },
+    importDrawings(list) {
+      const chart = chartRef.current;
+      if (!chart) return;
+      for (const s of list) {
+        const id = chart.createOverlay({
+          name: s.name,
+          points: s.points,
+          styles: penStyles({ color: s.color, size: s.size }),
+          onSelected: (e) => {
+            selectRef.current?.({
+              id: String(e.overlay.id),
+              name: e.overlay.name,
+            });
+            return false;
+          },
+          onDeselected: () => {
+            selectRef.current?.(null);
+            return false;
+          },
+          onRemoved: () => {
+            selectRef.current?.(null);
+            return false;
+          },
+        });
+        if (typeof id === "string") drawnRef.current.push(id);
+      }
     },
   }));
 
