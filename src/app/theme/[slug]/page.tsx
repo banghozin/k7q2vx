@@ -7,7 +7,7 @@ import { ShareLayerLink } from "@/components/share-layer-link";
 import { LayerHeatMap } from "@/components/layer-heat";
 import { SyncTable } from "@/components/sync-table";
 import { LeaderPanel } from "@/components/leader-panel";
-import { fetchNews, matchTheme } from "@/lib/sbhnews";
+import { newsForTheme, toNewsItem } from "@/lib/news-archive";
 import { ThemeBriefingLine } from "@/components/briefing";
 import { RotationChart } from "@/components/rotation-chart";
 import {
@@ -58,7 +58,15 @@ export default async function ThemePage({
   const brief = getBriefing(theme.slug);
   const rot = getRotation(theme.slug);
 
-  const news = matchTheme(await fetchNews(), theme.newsKeywords, 6);
+  /*
+   * 예전에는 테마 키워드로 공개 피드를 훑었는데, 그러면
+   * 사이버보안에 멕시코 군 배치 기사가, 조선·해운에 시외버스 요금 인상이
+   * 걸렸습니다(조선, 운임 같은 낱말이 엉뚱한 데서 잡힌 탓).
+   *
+   * 지금은 **종목 이름이 실제로 나온 기사만** 보관해 둔 아카이브에서 가져옵니다.
+   * 조사까지 따지는 이름 판정을 거치므로 인텔리시아 가 인텔로 잡히지 않습니다.
+   */
+  const news = newsForTheme(theme.slug, 6).map(toNewsItem);
 
   return (
     <div style={{ ["--accent" as string]: theme.accent }}>
@@ -165,9 +173,9 @@ export default async function ThemePage({
         <section className="section" id="news">
           <h2 className="section__title">이 테마에 걸린 기사</h2>
           <p className="section__sub">
-            공개 뉴스 피드에서 이 테마의 키워드가 걸린 기사만 골라 놓은 것입니다.
-            종목별 뉴스가 아니며, 기사와 위 종목 배치 사이에 인과관계를 주장하지
-            않습니다.
+            이 테마에 속한 <strong>종목 이름이 실제로 나온</strong> 기사만
+            보관해 둔 것입니다. 키워드가 비슷하다는 이유로 엮지 않습니다.
+            기사와 위 종목 배치 사이에 인과관계를 주장하지 않습니다.
           </p>
           <NewsList items={news} />
         </section>

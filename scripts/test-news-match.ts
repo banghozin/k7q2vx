@@ -8,7 +8,8 @@
  * 실행: npx tsx scripts/test-news-match.ts
  */
 
-import { hasName } from "./lib/korean-match";
+import { hasName } from "../src/lib/korean-match";
+import { namesIn, tickersIn } from "../src/lib/news-match";
 
 const CASES: [text: string, name: string, want: boolean, why: string][] = [
   ["인텔·IBM 등 경쟁사들도", "인텔", true, "가운뎃점 뒤 — 낱말 끝"],
@@ -43,4 +44,55 @@ for (const [text, name, want, why] of CASES) {
 }
 
 console.log(`\n  통과 ${pass} / 실패 ${fail}`);
+
+/*
+ * 여기부터는 **실제 기사로 겪은 오탐**입니다.
+ *
+ * 위 검사는 경계 규칙만 봤습니다. 그런데 실제로 터진 사고는 경계가 아니라
+ * **별칭 만들기**에서 났습니다 — 회사명 첫 낱말을 별칭으로 쓰는데 그게
+ * 일상어인 경우입니다. 그래서 여기서는 진짜 판정 함수를 그대로 부릅니다.
+ */
+console.log("\n실제 기사 판정");
+
+const REAL: [string, string[], string][] = [
+  [
+    "하나금융, 광주 서구에 '신중년 AI·디지털 일자리센터' 개관",
+    [],
+    "'디지털'이 디지털 리얼티(DLR)로 걸렸던 건",
+  ],
+  [
+    "트럼프, 사우디와 30년 민간 원전 협정 의회 제출…우라늄 농축 가능성 논란",
+    [],
+    "'우라늄'이 우라늄 에너지(UEC)로 걸렸던 건",
+  ],
+  [
+    "엔비디아, 그록과 200억 달러 계약…AI 반도체 설계 대전환",
+    ["NVDA"],
+    "제대로 걸려야 하는 기사",
+  ],
+  [
+    "노보 노디스크 주가 3.68% 급등, JPMorgan 목표가 상향",
+    ["NVO"],
+    "회사 전체 이름은 정상적으로 걸립니다",
+  ],
+  [
+    "디지털 리얼티, 신규 데이터센터 착공",
+    ["DLR"],
+    "전체 이름이면 '디지털'을 막아도 걸려야 합니다",
+  ],
+];
+
+for (const [text, want, why] of REAL) {
+  const got = [...new Set([...tickersIn(text), ...namesIn(text)])].sort();
+  const ok =
+    got.length === want.length && want.every((w) => got.includes(w));
+  if (ok) pass++;
+  else fail++;
+  console.log(
+    `  ${ok ? "OK  " : "FAIL"} [${got.join(",") || "없음"}] ` +
+      `기대 [${want.join(",") || "없음"}] — ${text.slice(0, 34)} (${why})`,
+  );
+}
+
+console.log(`\n  최종 통과 ${pass} / 실패 ${fail}`);
 if (fail > 0) process.exit(1);

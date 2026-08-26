@@ -12,6 +12,8 @@
  *   - 시세 숫자는 가져오지 않습니다. 제3자 권리 자료라 CC BY 4.0 대상이 아닙니다.
  */
 
+import { hasName } from "./korean-match";
+
 export const SBH = {
   feed: "https://www.sbhnews.com/feed.xml",
   source: "SBHNews / 센서스튜디오",
@@ -99,28 +101,78 @@ const DOMESTIC = [
   "청약",
 ];
 
-/** 테마 키워드로 기사를 고릅니다. 경제 카테고리를 우선합니다. */
-export function matchTheme(
+/**
+ * 미국 시장과 상관있다고 볼 만한 신호.
+ *
+ * 이 피드는 한국 매체라 `economy` 카테고리를 그냥 가져오면 국내 증권사 조직
+ * 개편, 중기부 상담회 같은 기사가 올라옵니다. 미국 개별종목을 매매하는
+ * 사람에게는 아무 쓸모가 없습니다.
+ *
+ * 그래서 **통과 조건을 두고 걸러냅니다.** 막을 것을 나열하는 방식(블랙리스트)은
+ * 늘 뚫립니다 — 국내 기업 이름을 다 적을 수는 없으니까요. 반대로
+ * "미국 시장 얘기가 나오거나, 우리가 다루는 회사가 나오거나" 를 요구하면
+ * 새로운 국내 기사가 들어와도 저절로 걸러집니다.
+ *
+ * 환율 단위로 아무 데나 나오는 "달러" 는 일부러 뺐습니다.
+ */
+const US_SIGNALS = [
+  "미국",
+  "미 증시",
+  "미증시",
+  "뉴욕증시",
+  "뉴욕 증시",
+  "나스닥",
+  "다우지수",
+  "S&P",
+  "월가",
+  "월스트리트",
+  "연준",
+  "연방준비",
+  "FOMC",
+  "파월",
+  "미 국채",
+  "서학개미",
+  "관세",
+  "트럼프",
+  "백악관",
+  "실리콘밸리",
+  "빅테크",
+];
+
+/**
+ * 미국 시장과 관련된 기사만 남깁니다.
+ *
+ * @param names 우리가 다루는 회사의 한국어 이름들. 이 중 하나가 나오면
+ *              시장 단어가 없어도 통과시킵니다 — 종목 기사가 더 값집니다.
+ */
+export function usHeadlines(
   items: NewsItem[],
-  keywords: string[],
-  limit = 6,
+  names: string[],
+  limit = 5,
 ): NewsItem[] {
-  const scored = items
-    .filter((it) => !DOMESTIC.some((d) => it.title.includes(d)))
-    .map((it) => {
-      const hay = `${it.title} ${it.description}`;
-      // 제목에서 걸린 키워드는 본문에서 걸린 것보다 크게 칩니다.
-      const inTitle = keywords.filter((k) => it.title.includes(k)).length;
-      const inBody = keywords.filter((k) => it.description.includes(k)).length;
-      return {
-        it,
-        score: inTitle * 2 + inBody + (it.category === "economy" ? 0.5 : 0),
-      };
-    })
-    .filter((x) => x.score >= 1)
-    .sort((a, b) => b.score - a.score);
-  return scored.slice(0, limit).map((x) => x.it);
+  const out: NewsItem[] = [];
+  for (const it of items) {
+    if (it.category !== "economy") continue;
+    if (DOMESTIC.some((d) => it.title.includes(d))) continue;
+    const hay = `${it.title} ${it.description}`;
+    const bySignal = US_SIGNALS.some((s) => hay.includes(s));
+    const byName = !bySignal && names.some((n) => hasName(hay, n));
+    if (!bySignal && !byName) continue;
+    out.push(it);
+    if (out.length >= limit) break;
+  }
+  return out;
 }
+
+/*
+ * 예전에 여기 `matchTheme` 이 있었습니다 — 테마 키워드로 기사를 훑는 방식.
+ * **지웠습니다.** 낱말이 겹친다는 이유로 엉뚱한 기사가 걸렸기 때문입니다.
+ *   사이버보안 ← 멕시코군 병력 배치, 콜롬비아 군부 작전
+ *   조선·해운  ← 시외버스 요금 인상, 조선 성리학자 묘소
+ * 지금은 **종목 이름이 실제로 나온 기사만** 보관해 두고(scripts/fetch-news.ts)
+ * 화면은 그 아카이브에서 가져옵니다. 다시 키워드 방식으로 돌아가지 마세요.
+ */
+
 
 /**
  * 서버와 브라우저가 같은 결과를 내야 하므로 표준시(UTC)로 고정합니다.

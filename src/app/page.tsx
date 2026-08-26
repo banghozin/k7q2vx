@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { THEMES, getTheme, multiThemeStocks } from "@/data/themes";
+import { THEMES, allTickers, getTheme, multiThemeStocks, nameOf } from "@/data/themes";
 import { CrossTicker } from "@/components/cross-ticker";
 import { NewsList } from "@/components/news-list";
-import { fetchNews } from "@/lib/sbhnews";
+import { fetchNews, usHeadlines } from "@/lib/sbhnews";
 import { BriefHistory } from "@/components/brief-history";
 import { ThemeBriefingLine } from "@/components/briefing";
 import {
@@ -31,9 +31,16 @@ export default async function Home() {
   const rotated = rotations().slice(0, 4);
 
   // 홈은 "지금"을 보여주는 자리라 보관본이 아니라 실시간 피드를 씁니다
-  const headlines = (await fetchNews())
-    .filter((n) => n.category === "economy")
-    .slice(0, 5);
+  /*
+   * 공개 피드는 한국 매체라 `economy` 를 그대로 쓰면 국내 증권사 조직 개편,
+   * 중기부 상담회 같은 기사가 올라옵니다. 미국 개별종목을 매매하는 사람에게는
+   * 쓸모가 없어서, **미국 시장 얘기이거나 우리가 다루는 회사 얘기인 것만**
+   * 남깁니다. 오늘 그런 기사가 없으면 이 구획은 아예 나오지 않습니다.
+   */
+  const covered = allTickers()
+    .map((t) => nameOf(t))
+    .filter((n): n is string => Boolean(n));
+  const headlines = usHeadlines(await fetchNews(), covered, 5);
 
   return (
     <>
@@ -65,10 +72,11 @@ export default async function Home() {
       {headlines.length > 0 && (
         <div className="wrap">
           <section className="section">
-            <h2 className="section__title">오늘의 경제 헤드라인</h2>
+            <h2 className="section__title">미국 시장 관련 헤드라인</h2>
             <p className="section__sub">
-              공개 뉴스 피드의 경제 기사입니다. 위 테마·종목 배치와 인과관계를
-              주장하지 않습니다.
+              공개 뉴스 피드의 경제 기사 중 <strong>미국 시장이나 여기서 다루는
+              종목</strong>이 언급된 것만 골랐습니다. 국내 기업 소식은 빼고 있습니다.
+              위 테마·종목 배치와 인과관계를 주장하지 않습니다.
             </p>
             <NewsList items={headlines} />
           </section>

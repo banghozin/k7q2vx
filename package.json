@@ -14,7 +14,8 @@
     "compute": "tsx scripts/compute.ts",
     "news": "tsx scripts/fetch-news.ts",
     "test:news": "tsx scripts/test-news-match.ts",
-    "update": "npm run fetch && npm run compute && npm run news"
+    "update": "npm run fetch && npm run compute && npm run news",
+    "clean-news": "tsx scripts/clean-news.ts"
   },
   "dependencies": {
     "klinecharts": "10.0.2",
