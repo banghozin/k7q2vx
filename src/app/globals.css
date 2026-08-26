@@ -1368,6 +1368,185 @@ tbody tr:hover {
   height: 100%;
 }
 
+/* ── 지난 훈련 기록 (차트 위에 덮는 판) ─────────────────────────── */
+
+.praclog {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  overflow-y: auto;
+  background: var(--ground-2);
+  padding: 1rem 1.15rem 1.5rem;
+}
+
+.praclog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.praclog__head h2 {
+  font-family: var(--font-serif), serif;
+  font-size: 1.15rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+.praclog__tally {
+  margin: 1rem 0 1.25rem;
+  padding: 0.85rem 1rem;
+  background: var(--panel);
+}
+
+.praclog__tally h3 {
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  color: var(--ink-4);
+  text-transform: uppercase;
+  margin: 0 0 0.6rem;
+  font-weight: 500;
+}
+
+.praclog__tally ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
+}
+
+.praclog__tally li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+}
+
+.praclog__tally li .mono {
+  color: var(--brass);
+}
+
+.praclog__hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.76rem;
+  line-height: 1.65;
+  color: var(--ink-3);
+}
+
+.praclog__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.praclog__item {
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.praclog__top {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.praclog__tick {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.praclog__name {
+  font-size: 0.78rem;
+  color: var(--ink-3);
+}
+
+.praclog__date {
+  font-size: 0.72rem;
+  color: var(--ink-4);
+  margin-left: auto;
+}
+
+.praclog__del {
+  background: none;
+  border: none;
+  color: var(--ink-4);
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0.3rem 0.35rem;
+}
+
+.praclog__del:hover {
+  color: var(--down);
+}
+
+.praclog__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.9rem;
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--ink-3);
+}
+
+.praclog__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+}
+
+.praclog__memo {
+  display: block;
+  width: 100%;
+  margin-top: 0.55rem;
+  padding: 0.45rem 0.55rem;
+  background: var(--ground);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--ink-2);
+  font-family: var(--font-sans), "Apple SD Gothic Neo", sans-serif;
+  font-size: 0.8rem;
+}
+
+.praclog__memo:focus {
+  outline: none;
+  border-color: var(--brass);
+}
+
+.praclog__foot {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1.1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--rule);
+}
+
+.praclog__note {
+  font-size: 0.72rem;
+  color: var(--ink-4);
+}
+
+.prac__save {
+  width: 100%;
+  margin-top: 0.9rem;
+}
+
+.prac__savenote {
+  margin: 0.4rem 0 0;
+  font-size: 0.68rem;
+  color: var(--ink-4);
+  text-align: center;
+}
+
 .prac__overlay {
   position: absolute;
   inset: 0;

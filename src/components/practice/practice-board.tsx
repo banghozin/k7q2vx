@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KLineData } from "klinecharts";
 import { allTickers, nameOf } from "@/data/themes";
 import { pct, tone } from "@/lib/format";
+import { usePractice } from "@/lib/store/practice-store";
 import { Kline, type KlineHandle } from "./kline";
+import { PracticeLog } from "./practice-log";
 
 /**
  * 차트 훈련.
@@ -120,12 +122,20 @@ export function PracticeBoard() {
   const [activeInd, setActiveInd] = useState<Set<string>>(new Set());
   const [chartReady, setChartReady] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
+  /** 같은 판을 두 번 저장하지 않게 */
+  const [saved, setSaved] = useState(false);
+
+  const sessions = usePractice((s) => s.sessions);
+  const addSession = usePractice((s) => s.add);
 
   /* ── 한 판 새로 뽑기 ─────────────────────────────────────────── */
   const newRound = useCallback(async () => {
     setPhase("loading");
     setTool(null);
     setPanelOpen(false);
+    setLogOpen(false);
+    setSaved(false);
     setMyLinesOn(true);
     chart.current?.clearDrawings();
     setDrawings([]);
@@ -251,11 +261,47 @@ export function PracticeBoard() {
     }));
   }, [actual]);
 
+  /**
+   * 이 판을 기록으로 남깁니다.
+   *
+   * 잘했다 못했다를 매기지 않습니다. **무엇을 그었고 그 구간에 무슨 일이
+   * 있었는지**만 적습니다. 쌓이면 "나는 추세선만 긋는구나" 같은 것을 스스로
+   * 볼 수 있고, 그게 이 훈련이 매매로 이어지는 지점입니다.
+   */
+  function saveRound() {
+    if (!round || !actual || saved) return;
+    const tools: Record<string, number> = {};
+    for (const d of chart.current?.listDrawings() ?? []) {
+      const label = TOOL_NAME[d.name] ?? d.name;
+      tools[label] = (tools[label] ?? 0) + 1;
+    }
+    addSession({
+      ticker: round.ticker,
+      name: round.name,
+      cutDate,
+      base: actual.base,
+      opened: actual.days,
+      change: actual.change,
+      maxUp: actual.maxUp,
+      maxDown: actual.maxDown,
+      tools,
+      levelsTouched: levelCheck.filter((l) => l.touched).length,
+      levelsTotal: levelCheck.length,
+      memo: "",
+    });
+    setSaved(true);
+  }
+
   function reveal(steps: number) {
     setPhase("reveal");
     setShown((s) => Math.min(FORWARD, Math.max(s, steps)));
     if (phase === "draw") setRounds((r) => r + 1);
   }
+
+  // 봉을 더 열면 숫자가 달라지므로 다시 남길 수 있게 합니다 (같은 판은 덮어씀)
+  useEffect(() => {
+    setSaved(false);
+  }, [shown]);
 
   function toggleMyLines() {
     const next = !myLinesOn;
@@ -326,6 +372,16 @@ export function PracticeBoard() {
           >
             전체 보기
           </button>
+          {sessions.length > 0 && (
+            <button
+              type="button"
+              className="btn btn--ghost"
+              aria-expanded={logOpen}
+              onClick={() => setLogOpen((v) => !v)}
+            >
+              기록 <b className="mono">{sessions.length}</b>
+            </button>
+          )}
           <button type="button" className="btn" onClick={() => void newRound()}>
             새 문제
           </button>
@@ -469,6 +525,19 @@ export function PracticeBoard() {
                   </ul>
                 </>
               )}
+
+              <button
+                type="button"
+                className="btn btn--ghost prac__save"
+                disabled={saved}
+                onClick={saveRound}
+              >
+                {saved ? "기록에 남겼습니다" : "이 판 기록에 남기기"}
+
+              </button>
+              <p className="prac__savenote">
+                이 기기에만 저장됩니다. 서버로 가지 않습니다.
+              </p>
             </section>
           )}
 
@@ -495,6 +564,7 @@ export function PracticeBoard() {
             </div>
           )}
           <Kline ref={chart} onReady={() => setChartReady(true)} />
+          {logOpen && <PracticeLog onClose={() => setLogOpen(false)} />}
         </main>
       </div>
 
