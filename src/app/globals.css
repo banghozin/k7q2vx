@@ -2918,6 +2918,17 @@ tbody tr:hover {
 
   .tablewrap td {
     display: flex;
+    /*
+     * 값이 길면 제목 아래로 내려가게 둡니다.
+     *
+     * 이게 없으면 긴 문장이 든 칸이 **줄어들지 못합니다.** 글자는 이름 없는
+     * 유연항목(anonymous flex item)이 되는데, 그것의 `min-width` 는 `auto`
+     * 이고 우리가 바깥에서 지정할 수가 없습니다. 그래서 칸은 151px 인데
+     * 글자가 386px 로 깔려 화면 밖으로 새어 나갔습니다 — `/about` 의
+     * 뉴스 출처 칸에서 폰 화면이 42px 가로로 밀렸습니다. 옆으로 새면서
+     * 세로로도 늘어져 그 칸 높이가 1713px 이었습니다(고친 뒤 617px).
+     */
+    flex-wrap: wrap;
     align-items: baseline;
     justify-content: space-between;
     gap: 0.5rem;

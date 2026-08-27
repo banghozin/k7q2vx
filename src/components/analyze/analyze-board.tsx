@@ -500,6 +500,13 @@ export function AnalyzeBoard({
 
   return (
     <div className="prac">
+      {/*
+        이 화면은 곧바로 h2 부터 시작하고 있었습니다. 다른 화면은 모두 h1 이
+        있는데 여기만 없어서, 화면을 소리로 듣는 사람에게는 "무슨 쪽인지" 를
+        말해 주는 첫 마디가 통째로 빠집니다. 차트 자리를 뺏지 않도록 눈에는
+        보이지 않게 두되 구조에는 넣습니다.
+      */}
+      <h1 className="sr-only">차트 분석 — {ticker}</h1>
       <header className="prac__bar">
         <div className="prac__id">
           <span className="prac__eyebrow">차트 분석</span>

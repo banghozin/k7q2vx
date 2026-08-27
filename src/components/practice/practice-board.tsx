@@ -578,6 +578,12 @@ export function PracticeBoard() {
   /* ── 화면 ────────────────────────────────────────────────────── */
   return (
     <div className="prac">
+      {/*
+        분석 화면과 같은 이유로 눈에 안 보이는 h1 을 둡니다 — 이 화면도 h2 부터
+        시작하고 있어서 화면을 소리로 듣는 사람에게 첫 마디가 없었습니다.
+        종목은 맞히기 전까지 가려야 하므로 제목에 넣지 않습니다.
+      */}
+      <h1 className="sr-only">차트 훈련</h1>
       <header className="prac__bar">
         <div className="prac__id">
           <span className="prac__eyebrow">차트 훈련</span>
