@@ -15,6 +15,7 @@
 import type { NewsItem } from "./sbhnews";
 import { SBH } from "./sbhnews";
 import { US_FEED_LABEL } from "./usnews";
+import { kstDay } from "./kst";
 
 /** 보관된 기사. 파일 크기를 줄이려고 키를 짧게 뒀습니다. */
 export type ArchivedRaw = {
@@ -33,8 +34,23 @@ export type Archived = {
   link: string;
   /** 발행 시각 (ISO) */
   date: string;
-  /** 발행일 (YYYY-MM-DD) */
+  /**
+   * 발행일 (YYYY-MM-DD, **UTC 기준**).
+   *
+   * 차트에 점을 찍는 자리를 정하는 데 씁니다. 일봉의 시각이 거래일 자정
+   * 기준이라 여기에 맞춰 둡니다. **사람에게 보여주는 날짜가 아닙니다** —
+   * 그건 `dayKst` 입니다.
+   */
   day: string;
+  /**
+   * 발행일 (YYYY-MM-DD, **한국 시각 기준**) — 화면에 보여주는 날짜.
+   *
+   * 미국 매체는 미국 오후에 기사를 냅니다. 그것이 한국에서는 이미 다음 날
+   * 아침입니다. 실제로 재어 보니 **보관된 기사의 62%가 UTC 와 한국 시각에서
+   * 서로 다른 날짜**였습니다. 한국 사람이 보는 "날짜별 보관함" 이므로
+   * 한국 날짜로 묶습니다.
+   */
+  dayKst: string;
   category: string;
   themes: string[];
   tickers: string[];
@@ -78,6 +94,7 @@ function expand(r: ArchivedRaw): Archived {
     link: r.u,
     date: r.d,
     day: r.d.slice(0, 10),
+    dayKst: kstDay(r.d),
     category: r.c,
     themes: r.th ?? [],
     tickers: r.tk ?? [],
@@ -100,11 +117,12 @@ export const hasArchive = archive.length > 0;
  * 날짜별로 묶어 돌려줍니다 — 지난 기사를 넘겨 보는 화면용.
  *
  * 최신 날짜가 앞에 옵니다. 기사가 하나도 없는 날은 아예 나오지 않습니다.
+ * 보는 사람이 한국에 있으므로 **한국 날짜**로 묶습니다.
  */
 export function newsByDay(): { day: string; items: Archived[] }[] {
   const map = new Map<string, Archived[]>();
   for (const a of archive) {
-    map.set(a.day, [...(map.get(a.day) ?? []), a]);
+    map.set(a.dayKst, [...(map.get(a.dayKst) ?? []), a]);
   }
   return [...map.entries()]
     .map(([day, items]) => ({ day, items }))

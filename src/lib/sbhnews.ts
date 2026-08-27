@@ -187,14 +187,18 @@ export function usHeadlines(
 
 
 /**
- * 서버와 브라우저가 같은 결과를 내야 하므로 표준시(UTC)로 고정합니다.
- * 기기 시간대에 따라 날짜가 달라지면 화면이 어긋납니다.
+ * 서버와 브라우저가 같은 결과를 내야 하므로 시간대를 **고정**합니다.
+ * 기기 시간대를 따라가면 날짜가 달라져 화면이 어긋납니다.
+ *
+ * 고정하되 **한국 시각**으로 둡니다. 처음에는 표준시(UTC)로 뒀는데, 그러면
+ * 한국 사람에게 아홉 시간 어긋난 시각을 시간대 표기도 없이 보여주게 됩니다.
+ * 미국 매체는 미국 오후에 기사를 내므로 그 차이가 날짜까지 바꿉니다.
  */
 const dateFmt = new Intl.DateTimeFormat("ko-KR", {
   year: "numeric",
   month: "2-digit",
   day: "2-digit",
-  timeZone: "UTC",
+  timeZone: "Asia/Seoul",
 });
 
 export function formatDate(pubDate: string): string {

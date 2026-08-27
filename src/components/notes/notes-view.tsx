@@ -11,6 +11,7 @@ import {
   type Trade,
 } from "@/lib/store/notes-store";
 import { useChartModal } from "@/lib/store/chart-modal-store";
+import { kstDay } from "@/lib/kst";
 import { TradeForm } from "./trade-form";
 
 const money = (n: number) =>
@@ -422,7 +423,7 @@ function TradeCard({ trade }: { trade: Trade }) {
           <span style={{ color: "var(--ink-4)" }}>
             {" "}
             — {trade.chart.tf} · 선 {trade.chart.drawings.length}개 ·{" "}
-            {trade.chart.at.slice(0, 10)} 기준
+            {kstDay(trade.chart.at)} 기준
             {trade.status === "closed" && " · 이후 실제 봉과 겹쳐 보입니다"}
           </span>
         </p>

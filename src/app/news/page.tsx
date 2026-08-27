@@ -17,19 +17,34 @@ export const metadata: Metadata = {
 /** 하루 한 번 갱신되므로 화면도 그 주기로 다시 만듭니다 */
 export const revalidate = 21600;
 
+/*
+ * 시간대를 고정합니다 — 기기 시간대를 따라가면 서버가 그린 것과 어긋납니다.
+ * 고정값은 **한국 시각**입니다. 보는 사람이 한국에 있고, 미국 매체는 미국
+ * 오후에 기사를 내므로 표준시로 두면 날짜 자체가 하루 밀립니다.
+ */
 const fmt = new Intl.DateTimeFormat("ko-KR", {
   year: "numeric",
   month: "2-digit",
   day: "2-digit",
   weekday: "short",
-  timeZone: "UTC",
+  timeZone: "Asia/Seoul",
 });
 
 const time = new Intl.DateTimeFormat("ko-KR", {
   hour: "2-digit",
   minute: "2-digit",
   hour12: false,
-  timeZone: "UTC",
+  timeZone: "Asia/Seoul",
+});
+
+/** "마지막 수집" 도장 — 여기도 원본 ISO 를 그대로 자르면 표준시가 새어 나옵니다 */
+const stamp = new Intl.DateTimeFormat("ko-KR", {
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+  timeZone: "Asia/Seoul",
 });
 
 export default function NewsPage() {
@@ -53,7 +68,7 @@ export default function NewsPage() {
             {days.reduce((a, d) => a + d.items.length, 0)}건
           </span>
           {archiveUpdatedAt && (
-            <span>마지막 수집 {archiveUpdatedAt.slice(0, 16).replace("T", " ")}</span>
+            <span>마지막 수집 {stamp.format(new Date(archiveUpdatedAt))}</span>
           )}
           <span>국내 기업 소식 제외</span>
         </div>

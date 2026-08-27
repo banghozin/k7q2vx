@@ -1,10 +1,11 @@
 import { SBH } from "@/lib/sbhnews";
 import type { Archived } from "@/lib/news-archive";
 
+// 시간대는 고정하되 한국 시각으로 — 미국 매체 기사는 표준시로 두면 하루 밀립니다
 const fmt = new Intl.DateTimeFormat("ko-KR", {
   month: "2-digit",
   day: "2-digit",
-  timeZone: "UTC",
+  timeZone: "Asia/Seoul",
 });
 
 function day(d: string): string {
