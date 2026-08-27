@@ -118,6 +118,114 @@ function newId(): string {
   return `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
+/* ── 들어오는 기록을 믿지 않기 ─────────────────────────────────────
+ *
+ * 가져오기는 `trades` 가 배열인지만 보고 통째로 저장했습니다. 그런데 그
+ * 안에 무엇이 들었는지는 아무도 확인하지 않았습니다. 실제로 재어 보니
+ * **여섯 가지 중 셋이 화면을 죽였습니다** — null 이 섞인 것, 값이 숫자가
+ * 아니라 글자인 것, 수량이 음수인 것.
+ *
+ * 죽는 것으로 끝이 아닙니다. 그 값이 **저장까지 되기 때문에** 새로고침해도
+ * 계속 죽어 있습니다. 비개발자에게는 빠져나올 길이 없고, 그 사이 원래
+ * 매매 기록은 이미 덮어써져 사라진 뒤입니다. 백업을 되살리려다 백업을
+ * 잃는 셈입니다.
+ *
+ * 그래서 한 건씩 봅니다. 성한 것만 들이고 나머지는 버리되, **몇 건을
+ * 버렸는지 돌려줘서** 화면이 사람에게 말할 수 있게 합니다. 조용히 버리면
+ * "가져왔는데 절반이 없다" 가 되고 그게 더 나쁩니다.
+ */
+
+const num = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v);
+const str = (v: unknown): v is string => typeof v === "string";
+
+function cleanTargets(v: unknown): Target[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter(
+    (t): t is Target =>
+      !!t && typeof t === "object" && num((t as Target).price) && num((t as Target).portion),
+  );
+}
+
+function cleanChart(v: unknown): TradeChart | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const c = v as TradeChart;
+  if (!str(c.tf) || !str(c.at) || !Array.isArray(c.drawings)) return undefined;
+  return { tf: c.tf, drawings: c.drawings, at: c.at };
+}
+
+/** 한 건이 쓸 만한가. 아니면 null */
+function cleanTrade(v: unknown): Trade | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const t = v as Record<string, unknown>;
+
+  // 없으면 계산이 성립하지 않는 것들. 가격과 수량은 0 이나 음수면 안 됩니다
+  if (!str(t.ticker) || !t.ticker.trim()) return null;
+  if (!num(t.entryPrice) || t.entryPrice <= 0) return null;
+  if (!num(t.qty) || t.qty <= 0) return null;
+  if (!num(t.stopPrice) || t.stopPrice <= 0) return null;
+  if (!str(t.entryDate) || !/^\d{4}-\d{2}-\d{2}$/.test(t.entryDate)) return null;
+
+  const closed = t.status === "closed";
+  return {
+    id: str(t.id) && t.id ? t.id : newId(),
+    ticker: t.ticker.trim().toUpperCase().slice(0, 12),
+    name: str(t.name) ? t.name.slice(0, 80) : "",
+    side: t.side === "short" ? "short" : "long",
+    status: closed ? "closed" : "open",
+    entryPrice: t.entryPrice,
+    entryDate: t.entryDate,
+    qty: t.qty,
+    stopPrice: t.stopPrice,
+    targets: cleanTargets(t.targets),
+    reasons: Array.isArray(t.reasons)
+      ? (t.reasons.filter(
+          (r) => typeof r === "string" && (REASON_TAGS as readonly string[]).includes(r),
+        ) as ReasonTag[])
+      : [],
+    memo: str(t.memo) ? t.memo.slice(0, 4000) : "",
+    // 청산 값은 종료된 건에만 답니다 — 진행 중인데 청산가가 붙어 있으면 계산이 어긋납니다
+    exitPrice: closed && num(t.exitPrice) && t.exitPrice > 0 ? t.exitPrice : undefined,
+    exitDate:
+      closed && str(t.exitDate) && /^\d{4}-\d{2}-\d{2}$/.test(t.exitDate)
+        ? t.exitDate
+        : undefined,
+    followedStop: typeof t.followedStop === "boolean" ? t.followedStop : undefined,
+    review: closed && str(t.review) ? t.review.slice(0, 4000) : undefined,
+    chart: cleanChart(t.chart),
+    createdAt: str(t.createdAt) ? t.createdAt : new Date().toISOString(),
+  };
+}
+
+export function cleanTrades(v: unknown): { trades: Trade[]; dropped: number } {
+  if (!Array.isArray(v)) return { trades: [], dropped: 0 };
+  const trades: Trade[] = [];
+  let dropped = 0;
+  const seen = new Set<string>();
+  for (const raw of v) {
+    const t = cleanTrade(raw);
+    if (!t) {
+      dropped++;
+      continue;
+    }
+    // 같은 id 가 두 번 들어오면 리액트 목록이 어긋납니다
+    if (seen.has(t.id)) t.id = newId();
+    seen.add(t.id);
+    trades.push(t);
+  }
+  return { trades, dropped };
+}
+
+export function cleanSettings(v: unknown): Settings {
+  const s = (v ?? {}) as Record<string, unknown>;
+  return {
+    accountSize: num(s.accountSize) && s.accountSize > 0 ? s.accountSize : null,
+    principles: Array.isArray(s.principles)
+      ? s.principles.filter(str).map((p) => p.slice(0, 300)).slice(0, 50)
+      : [],
+  };
+}
+
 export const useNotes = create<State & Actions>()(
   persist(
     (set) => ({
@@ -159,7 +267,12 @@ export const useNotes = create<State & Actions>()(
       setSettings: (patch) =>
         set((s) => ({ settings: { ...s.settings, ...patch } })),
 
-      replaceAll: ({ trades, settings }) => set({ trades, settings }),
+      // 어느 길로 들어오든 여기서 한 번 더 거릅니다
+      replaceAll: ({ trades, settings }) =>
+        set({
+          trades: cleanTrades(trades).trades,
+          settings: cleanSettings(settings),
+        }),
 
       setHydrated: () => set({ hydrated: true }),
     }),
@@ -167,6 +280,21 @@ export const useNotes = create<State & Actions>()(
       name: "thememap.notes.v1",
       storage: deviceStorage(),
       partialize: (s) => ({ trades: s.trades, settings: s.settings }),
+      /*
+       * 저장돼 있던 것도 믿지 않습니다.
+       *
+       * 예전에 상한 값을 가져오기로 들여 놓은 브라우저가 있다면, 고친 코드를
+       * 배포해도 그 브라우저는 계속 죽습니다 — 저장된 값을 그대로 다시
+       * 읽으니까요. 여기서 한 번 거르면 다음 방문에 스스로 낫습니다.
+       */
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<State>;
+        return {
+          ...current,
+          trades: cleanTrades(p.trades).trades,
+          settings: cleanSettings(p.settings),
+        };
+      },
       onRehydrateStorage: () => (state) => state?.setHydrated(),
     },
   ),

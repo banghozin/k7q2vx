@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { placementsOf } from "@/data/themes";
 import {
+  cleanTrades,
   computeTrade,
   disciplineScore,
   reasonStats,
@@ -134,7 +135,7 @@ export function NotesView() {
           <div className="readout__label">백업</div>
           <div style={{ display: "flex", gap: ".35rem", marginTop: ".3rem" }}>
             <ExportButton />
-            <ImportButton onLoad={replaceAll} />
+            <ImportButton onLoad={replaceAll} current={trades.length} />
           </div>
           <div className="readout__note">
             기기에만 저장됩니다. 브라우저를 지우면 사라집니다
@@ -715,10 +716,15 @@ function ExportButton() {
 
 function ImportButton({
   onLoad,
+  current,
 }: {
   onLoad: (d: { trades: Trade[]; settings: ReturnType<typeof useNotes.getState>["settings"] }) => void;
+  /** 지금 들고 있는 기록 수 — 덮어쓰기 전에 몇 건이 사라지는지 말해 주려고 */
+  current: number;
 }) {
   const ref = useRef<HTMLInputElement>(null);
+  const countRef = useRef(current);
+  countRef.current = current;
 
   return (
     <>
@@ -730,16 +736,47 @@ function ImportButton({
         onChange={async (e) => {
           const f = e.target.files?.[0];
           if (!f) return;
+          /*
+           * 여기서 걸러야 합니다.
+           *
+           * 예전에는 `trades` 가 배열인지만 보고 통째로 저장했습니다. 안에
+           * 무엇이 들었는지는 아무도 안 봤습니다. 재어 보니 여섯 가지 중
+           * 셋이 화면을 죽였고, 그 값이 저장까지 되니 새로고침해도 계속
+           * 죽어 있었습니다. **원래 기록은 이미 덮어써진 뒤**라 백업을
+           * 되살리려다 백업을 잃는 셈이었습니다.
+           *
+           * 지금은 한 건씩 보고, 몇 건이 버려졌는지 사람에게 말합니다.
+           * 하나도 못 살리면 아예 손대지 않습니다 — 멀쩡한 기록을 빈
+           * 목록으로 덮어쓰는 것이 가장 나쁩니다.
+           */
           try {
             const j = JSON.parse(await f.text());
-            if (Array.isArray(j.trades)) {
-              onLoad({
-                trades: j.trades,
-                settings: j.settings ?? { accountSize: null, principles: [] },
-              });
+            const { trades, dropped } = cleanTrades(j?.trades);
+            if (trades.length === 0) {
+              alert(
+                dropped > 0
+                  ? `쓸 수 있는 기록이 없습니다(${dropped}건 모두 모양이 맞지 않습니다). 지금 기록은 그대로 둡니다.`
+                  : "매매 기록이 들어 있지 않은 파일입니다. 지금 기록은 그대로 둡니다.",
+              );
+              e.target.value = "";
+              return;
+            }
+            const now = countRef.current;
+            if (
+              now > 0 &&
+              !confirm(
+                `지금 있는 기록 ${now}건이 파일의 ${trades.length}건으로 바뀝니다. 되돌릴 수 없습니다. 계속할까요?`,
+              )
+            ) {
+              e.target.value = "";
+              return;
+            }
+            onLoad({ trades, settings: j?.settings });
+            if (dropped > 0) {
+              alert(`${trades.length}건을 가져왔습니다. 모양이 맞지 않는 ${dropped}건은 뺐습니다.`);
             }
           } catch {
-            alert("파일을 읽지 못했습니다.");
+            alert("파일을 읽지 못했습니다. 지금 기록은 그대로 둡니다.");
           }
           e.target.value = "";
         }}
