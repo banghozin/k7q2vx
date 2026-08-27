@@ -11,6 +11,12 @@ import {
 } from "@/components/practice/kline";
 import { recentSheets, useAnalysis } from "@/lib/store/analysis-store";
 import { useNotes } from "@/lib/store/notes-store";
+import {
+  SENSITIVITY,
+  detectSwings,
+  lastLeg,
+  suggestThreshold,
+} from "@/lib/swings";
 
 /**
  * 차트 분석.
@@ -113,6 +119,11 @@ const WIDTHS = [
 const ENTRY_COLOR = "#e0564f";
 const EXIT_COLOR = "#4f86e0";
 const STOP_COLOR = "#8a8378";
+
+/** 자동으로 이어 그리는 고저점 선의 색 — 내가 그은 선과 구별되게 흐리게 */
+const SWING_COLOR = "#8a8378";
+/** 한 번에 이어 그릴 파동의 최대 개수. 다 그리면 화면이 지그재그로 덮입니다 */
+const MAX_LEGS = 16;
 
 /** 4시간봉을 만들 때만 씁니다 — 60분봉 넷을 하나로 */
 function groupBars(bars: Bar[], n: number): Bar[] {
@@ -331,6 +342,64 @@ export function AnalyzeBoard({
     const key = toolRef.current;
     if (key) chart.current?.startDraw(key, penRef.current);
   }, [autoSave]);
+
+  /* ── 고저점 자동 찾기 ────────────────────────────────────────
+   *
+   * 여기서 나오는 것은 **판단이 아니라 눈금**입니다. 어디가 고점이고
+   * 저점이었는지 규칙 하나로 세어 줄 뿐이고, 그 위에 무슨 선을 긋고 어떻게
+   * 읽을지는 사람이 합니다. 그려진 것은 내가 그은 선과 똑같이 다뤄지므로
+   * 색을 바꾸거나 지울 수 있습니다.
+   */
+  const [sens, setSens] = useState<string>("mid");
+
+  const swingInfo = useMemo(() => {
+    const src = bars.map((b) => ({
+      time: b.time,
+      high: b.high,
+      low: b.low,
+      close: b.close,
+    }));
+    const mult =
+      SENSITIVITY.find((s) => s.key === sens)?.multiple ?? SENSITIVITY[1].multiple;
+    const threshold = suggestThreshold(src, mult);
+    return { threshold, swings: detectSwings(src, threshold) };
+  }, [bars, sens]);
+
+  const drawSwings = useCallback(() => {
+    const pts = swingInfo.swings.slice(-(MAX_LEGS + 1));
+    if (pts.length < 2) return;
+    const legs: SavedDrawing[] = [];
+    for (let i = 1; i < pts.length; i++) {
+      legs.push({
+        name: "segment",
+        points: [
+          { timestamp: pts[i - 1].time * 1000, value: pts[i - 1].price },
+          { timestamp: pts[i].time * 1000, value: pts[i].price },
+        ],
+        color: SWING_COLOR,
+        size: 1.2,
+      });
+    }
+    chart.current?.importDrawings(legs);
+    autoSave();
+  }, [swingInfo, autoSave]);
+
+  const drawAutoFib = useCallback(() => {
+    const leg = lastLeg(swingInfo.swings);
+    if (!leg) return;
+    chart.current?.importDrawings([
+      {
+        name: "fibRetracement",
+        points: [
+          { timestamp: leg[0].time * 1000, value: leg[0].price },
+          { timestamp: leg[1].time * 1000, value: leg[1].price },
+        ],
+        color: penRef.current.color,
+        size: penRef.current.size,
+      },
+    ]);
+    autoSave();
+  }, [swingInfo, autoSave]);
 
   const removePicked = useCallback(() => {
     if (!picked) return;
@@ -595,6 +664,53 @@ export function AnalyzeBoard({
               </div>
             </section>
           ))}
+
+          {!reviewing && (
+            <section>
+              <h2>자동으로 찾기</h2>
+              <div className="prac__grid">
+                {SENSITIVITY.map((s) => (
+                  <button
+                    key={s.key}
+                    type="button"
+                    className="prac__tool"
+                    aria-pressed={sens === s.key}
+                    onClick={() => setSens(s.key)}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              <p className="prac__penhint">
+                이 종목이 실제로 움직이는 폭을 재서 기준을 잡습니다. 지금은{" "}
+                <strong>{(swingInfo.threshold * 100).toFixed(1)}% 되돌림</strong>{" "}
+                기준 · 고저점 {swingInfo.swings.length}개.
+              </p>
+              <div className="prac__row">
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={drawSwings}
+                  disabled={swingInfo.swings.length < 2}
+                >
+                  주요 고저점 잇기
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={drawAutoFib}
+                  disabled={!lastLeg(swingInfo.swings)}
+                >
+                  자동 피보나치
+                </button>
+              </div>
+              <p className="prac__penhint">
+                어디가 고점·저점이었는지 세어 줄 뿐입니다. 사고팔 자리를
+                가리키는 것이 아닙니다. 그려진 선은 직접 그은 것과 똑같이
+                고치거나 지울 수 있습니다.
+              </p>
+            </section>
+          )}
 
           {drawings.length > 0 && (
             <section>
