@@ -170,13 +170,24 @@ export function newsDaysForTicker(ticker: string): {
     .sort((a, b) => a.time - b.time);
 }
 
-/** 실시간 피드 항목과 같은 모양으로 바꿉니다 (요약은 없습니다) */
-export function toNewsItem(a: Archived): NewsItem {
+/**
+ * 실시간 피드 항목과 같은 모양으로 바꿉니다 (요약은 없습니다).
+ *
+ * **출처를 반드시 함께 넘깁니다.** 예전에는 여기서 출처를 버렸는데, 그러면
+ * 받는 쪽이 어느 매체인지 알 수 없어 한국어 매체 하나로 뭉뚱그려 표기하게
+ * 됩니다. 실제로 CNBC 기사만 있는 테마 화면에 "출처 SBHNews · CC BY 4.0" 이
+ * 붙어 있었습니다 — 잘못된 저작자 표시입니다.
+ */
+export function toNewsItem(
+  a: Archived,
+): NewsItem & { sourceLabel: string; tickers: string[] } {
   return {
     title: a.title,
     link: a.link,
     description: "",
     pubDate: a.date,
     category: a.category,
+    sourceLabel: a.sourceLabel,
+    tickers: a.tickers,
   };
 }
