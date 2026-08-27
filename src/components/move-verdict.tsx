@@ -78,7 +78,7 @@ export function MoveVerdictBlock({
               </Link>
               <span className="mv__num mono">
                 {isDaily ? "하루" : "5일"} 이 종목{" "}
-                <span className={own != null && own >= 0 ? "up" : "down"}>
+                <span className={own == null ? "" : own >= 0 ? "up" : "down"}>
                   {pct(own)}
                 </span>
                 <span className="mv__peers">

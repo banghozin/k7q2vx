@@ -10,6 +10,7 @@
  * 실행: npm run validate
  */
 
+import { readFile } from "node:fs/promises";
 import { fetchMany } from "./lib/yahoo";
 import { allFetchTickers } from "./lib/universe";
 
@@ -43,6 +44,31 @@ async function main() {
   if (thin.length) {
     console.error(`\n[validate] 데이터가 부족한 티커가 있어 중단합니다.`);
     process.exit(1);
+  }
+
+  /*
+   * 영문 회사명 표에 빠진 종목이 있는지 봅니다.
+   *
+   * 종목을 새로 넣고 `npm run names` 를 안 돌리면 **영문 기사에서 그 종목이
+   * 조용히 안 걸립니다.** 아무 오류도 안 나서 알아채기 어렵습니다.
+   * 갱신을 멈출 일은 아니므로 알려만 줍니다.
+   */
+  try {
+    const namesFile = JSON.parse(
+      await readFile("src/data/generated/names.json", "utf8"),
+    ) as { names?: Record<string, string> };
+    const known = new Set(Object.keys(namesFile.names ?? {}));
+    const missing = tickers.filter((t) => !known.has(t) && t !== "SPY" && t !== "QQQ");
+    if (missing.length) {
+      console.warn(
+        `\n[validate] 영문 회사명이 없는 종목 ${missing.length}개: ${missing.join(", ")}\n` +
+          `   → \`npm run names\` 를 돌리세요. 안 그러면 영문 기사에서 이 종목이 안 걸립니다.`,
+      );
+    }
+  } catch {
+    console.warn(
+      `\n[validate] names.json 을 읽지 못했습니다. \`npm run names\` 를 한 번 돌리세요.`,
+    );
   }
 
   console.log(`[validate] 전부 통과.`);
