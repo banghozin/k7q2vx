@@ -60,6 +60,13 @@ jobs:
         run: npm run news
         continue-on-error: true
 
+      # 계산 스크립트가 스스로 보는 것(NaN·Infinity)만으로는 안 잡히는 것들이
+      # 있습니다 — 파일끼리 기준일이 어긋나거나, 없는 층에 판정이 붙거나,
+      # 아카이브에 이상한 링크가 들어오는 경우입니다. 조용히 틀린 숫자를
+      # 배포하는 것이 제일 나쁘므로 커밋 앞에서 막습니다.
+      - name: 데이터 무결성 검사
+        run: npm run test:data
+
       - name: 바뀐 것만 커밋
         run: |
           git config user.name "github-actions[bot]"

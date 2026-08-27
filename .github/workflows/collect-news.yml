@@ -40,6 +40,11 @@ jobs:
       - name: 기사 모으기
         run: npm run news
 
+      # 아카이브는 지우면 되찾을 수 없습니다. 이상한 링크나 날짜가 들어온
+      # 채로 커밋되면 나중에 걷어내기가 어려우므로 여기서 막습니다.
+      - name: 데이터 무결성 검사
+        run: npm run test:data
+
       - name: 바뀐 것이 있으면 커밋
         run: |
           git config user.name "github-actions[bot]"

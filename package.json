@@ -16,6 +16,7 @@
     "names": "tsx scripts/fetch-names.ts",
     "test:news": "tsx scripts/test-news-match.ts",
     "test:en": "tsx scripts/test-en-match.ts",
+    "test:data": "tsx scripts/audit-data.ts",
     "update": "npm run fetch && npm run compute && npm run news",
     "clean-news": "tsx scripts/clean-news.ts"
   },
