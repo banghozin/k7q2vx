@@ -47,11 +47,20 @@ export function ChartModal() {
 
   // 주소에 ?stock=NVDA 가 붙어 있으면 그 종목 차트가 열린 채로 시작합니다.
   // 링크 하나로 "이 종목 보고 있는 화면"을 그대로 넘길 수 있습니다.
+  //
+  // **대문자로 맞춰 들여야 합니다.** 주소는 남이 쳐 넣거나 옮겨 적는 것이라
+  // `?stock=nvda` 처럼 소문자로 올 수 있는데, 그대로 두면 이 티커가 화면
+  // 곳곳에서 "NVDA" 와 다른 값으로 취급됩니다. 실제로 매매노트의 진입·청산
+  // 표시가 `t.ticker !== ticker` 로 걸러져 **차트에서 통째로 사라졌습니다.**
+  // 매매노트 화면(`notes-view`)은 같은 자리에서 이미 대문자로 맞추고 있어
+  // 여기만 어긋나 있던 것입니다.
   const openRef = useRef(openModal);
   openRef.current = openModal;
   useEffect(() => {
-    const t = new URLSearchParams(window.location.search).get("stock");
-    if (t) openRef.current(t, nameOf(t) ?? t.toUpperCase());
+    const raw = new URLSearchParams(window.location.search).get("stock");
+    const t = (raw ?? "").trim().toUpperCase();
+    if (!/^[A-Z0-9.\-]{1,10}$/.test(t)) return;
+    openRef.current(t, nameOf(t) ?? t);
   }, []);
 
   // 열고 닫힐 때 주소를 맞춰 줍니다.
