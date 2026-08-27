@@ -1671,16 +1671,17 @@ tbody tr:hover {
 /* ── 펜 (색·굵기 고르기) ───────────────────────────────────────── */
 
 /* 3열 두 줄. 한 줄에 다 넣으려다 5+1 로 갈라져 빈 칸이 남았습니다 */
+/* 색이 열둘로 늘어 4열로 좁혔습니다 — 세 줄이면 서랍에 다 들어옵니다 */
 .prac__swatches {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.4rem;
-  margin-bottom: 0.55rem;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.32rem;
+  margin-bottom: 0.5rem;
 }
 
 .prac__swatch {
   width: 100%;
-  height: 1.85rem;
+  height: 1.55rem;
   border: 1px solid var(--rule-strong);
   border-radius: 2px;
   cursor: pointer;
@@ -1697,8 +1698,72 @@ tbody tr:hover {
   box-shadow: 0 0 0 2px var(--ground-2), 0 0 0 3px var(--ink);
 }
 
+/* ── 색 직접 고르기 ──────────────────────────────────────────── */
+
+.prac__custom {
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+  margin-bottom: 0.55rem;
+}
+
+/*
+ * 진짜 `input[type=color]` 은 기기마다 생김새가 제각각이라 그대로 두면
+ * 화면이 어그러집니다. 네모는 우리가 그리고 입력칸은 그 위에 투명하게
+ * 덮어 둡니다 — 눌리는 것은 진짜 입력칸이라 기기의 색 고르개가 열립니다.
+ */
+.prac__swatch--custom {
+  position: relative;
+  display: inline-block;
+  width: 2.4rem;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.prac__swatch--custom input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+}
+
+.prac__custombtn {
+  flex: 1;
+  font-size: 0.7rem;
+  padding: 0.3rem 0.4rem;
+}
+
+.prac__recent {
+  margin-bottom: 0.55rem;
+}
+
+.prac__recent__label {
+  display: block;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  color: var(--ink-4);
+  margin-bottom: 0.3rem;
+}
+
+.prac__recent__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.prac__swatch--sm {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex-shrink: 0;
+}
+
 .prac__widths {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.3rem;
 }
 
@@ -1717,6 +1782,13 @@ tbody tr:hover {
   font-family: inherit;
   font-size: 0.66rem;
   cursor: pointer;
+}
+
+/* 굵기가 넷이라 칸이 좁습니다. 글자가 접히면 그 칸만 키가 커집니다 */
+.prac__width span {
+  font-size: 0.58rem;
+  white-space: nowrap;
+  letter-spacing: -0.03em;
 }
 
 .prac__width i {

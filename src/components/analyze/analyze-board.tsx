@@ -12,6 +12,7 @@ import {
 import { HandIcon } from "@/components/practice/hand-icon";
 import { ToolButton } from "@/components/practice/tool-button";
 import { INDICATOR_ICONS, TOOL_ICONS } from "@/components/practice/tool-icons";
+import { PenPicker } from "@/components/practice/pen-picker";
 import { recentSheets, sheetKey, useAnalysis } from "@/lib/store/analysis-store";
 import { useChartPrefs } from "@/lib/store/chart-prefs-store";
 import { useNotes } from "@/lib/store/notes-store";
@@ -105,21 +106,6 @@ const INDICATORS = [
   { key: "KDJ", label: "스토캐스틱", onCandle: false },
 ];
 
-const PENS = [
-  { color: "#c8a15a", label: "황동" },
-  { color: "#e9e5dd", label: "흰빛" },
-  { color: "#7fa86b", label: "풀색" },
-  { color: "#5bc8d6", label: "하늘" },
-  { color: "#d97fb8", label: "자주" },
-  { color: "#f0a23c", label: "주황" },
-];
-
-const WIDTHS = [
-  { size: 1, label: "얇게" },
-  { size: 2, label: "보통" },
-  { size: 3.5, label: "굵게" },
-];
-
 /* 회고 모드에서 실제로 사고판 자리를 표시하는 색 (한국 관행: 상승 빨강) */
 const ENTRY_COLOR = "#e0564f";
 const EXIT_COLOR = "#4f86e0";
@@ -172,7 +158,12 @@ export function AnalyzeBoard({
   const [tool, setTool] = useState<string | null>(null);
   const [drawings, setDrawings] = useState<{ id: string; name: string }[]>([]);
   const [picked, setPicked] = useState<{ id: string; name: string } | null>(null);
-  const [penColor, setPenColor] = useState(PENS[0].color);
+  /*
+   * 펜은 저장해 둔 것에서 시작합니다. 매번 들어올 때마다 쓰던 색을 다시
+   * 고르게 하면 성가십니다.
+   */
+  const rememberPen = useChartPrefs((s) => s.setPen);
+  const [penColor, setPenColor] = useState("#c8a15a");
   const [penSize, setPenSize] = useState(2);
   /*
    * 보조지표는 저장해 둔 것에서 시작합니다.
@@ -185,6 +176,26 @@ export function AnalyzeBoard({
   const rememberInd = useChartPrefs((s) => s.setIndicators);
   const [activeInd, setActiveInd] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
+
+  /*
+   * 저장해 둔 펜을 되살립니다.
+   *
+   * `useState(저장값)` 으로 시작하면 안 됩니다. 서버에서 화면을 먼저 만들 때는
+   * 저장소가 없어 기본값으로 그려지고, 브라우저가 그 위에 붙을 때 값이 달라져
+   * 서로 어긋납니다. 지표와 같은 방식으로 **다 읽고 난 뒤 한 번** 올립니다.
+   *
+   * 딱 한 번만 합니다 — 저장값이 바뀔 때마다 따라가면 사용자가 방금 고른
+   * 색을 도로 덮어씁니다.
+   */
+  const penRestored = useRef(false);
+  useEffect(() => {
+    if (!prefsHydrated || penRestored.current) return;
+    penRestored.current = true;
+    const p = useChartPrefs.getState().pen;
+    setPenColor(p.color);
+    setPenSize(p.size);
+  }, [prefsHydrated]);
+
   const [savedAt, setSavedAt] = useState<string | null>(null);
 
   const sheets = useAnalysis((s) => s.sheets);
@@ -529,12 +540,13 @@ export function AnalyzeBoard({
     (color: string, size: number) => {
       setPenColor(color);
       setPenSize(size);
+      rememberPen(color, size); // 다음에 들어와도 쓰던 펜 그대로
       if (picked) {
         chart.current?.restyle(picked.id, { color, size });
         autoSave();
       }
     },
-    [picked, autoSave],
+    [picked, autoSave, rememberPen],
   );
 
   /* ── 종목 찾기 ───────────────────────────────────────────────── */
@@ -709,33 +721,7 @@ export function AnalyzeBoard({
                 ? `${TOOL_NAME[picked.name] ?? picked.name} 색·굵기`
                 : "펜"}
             </h2>
-            <div className="prac__swatches">
-              {PENS.map((p) => (
-                <button
-                  key={p.color}
-                  type="button"
-                  className="prac__swatch"
-                  style={{ background: p.color }}
-                  aria-label={p.label}
-                  aria-pressed={penColor === p.color}
-                  onClick={() => applyPen(p.color, penSize)}
-                />
-              ))}
-            </div>
-            <div className="prac__widths">
-              {WIDTHS.map((w) => (
-                <button
-                  key={w.size}
-                  type="button"
-                  className="prac__width"
-                  aria-pressed={penSize === w.size}
-                  onClick={() => applyPen(penColor, w.size)}
-                >
-                  <i style={{ height: `${w.size}px`, background: penColor }} />
-                  <span>{w.label}</span>
-                </button>
-              ))}
-            </div>
+            <PenPicker color={penColor} size={penSize} onChange={applyPen} />
             {picked ? (
               <button
                 type="button"
