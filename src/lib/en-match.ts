@@ -63,6 +63,9 @@ const STOP_HEADS = new Set([
   // 시험에서 걸린 것 — "Riot police", "the ouster of the CEO",
   // "a tenable position", "a coherent policy" 가 전부 회사로 잡혔습니다
   "Riot", "Ouster", "Tenable", "Coherent",
+  // 앞의 `The` 를 떼면서 새로 첫 낱말이 된 것. "Bank shares rose" 처럼
+  // 아무 은행 기사에나 걸립니다 — 전체 이름일 때만 잡습니다
+  "Bank",
 ]);
 
 /**
@@ -92,6 +95,13 @@ function stripSuffix(name: string): string {
   let s = name;
   // 여러 겹으로 붙는 경우가 있습니다 ("… Holdings, Inc.")
   for (let i = 0; i < 4; i++) s = s.replace(SUFFIX, " ");
+  /*
+   * 앞의 `The` 도 뗍니다. 야후는 `The Boeing Company`,
+   * `The Bank of New York Mellon Corporation` 이라고 주는데 기사는 그냥
+   * `Boeing`, `Bank of New York Mellon` 이라고 씁니다. 안 떼면 이 둘을
+   * 통째로 놓칩니다(실제로 놓치고 있었습니다).
+   */
+  s = s.replace(/^The\s+/i, "");
   return s.replace(/[,\s]+$/g, "").replace(/\s{2,}/g, " ").trim();
 }
 
@@ -190,10 +200,22 @@ export function enTickersIn(text: string): string[] {
 function properNoun(matched: string): boolean {
   const words = matched.split(/\s+/).filter(Boolean);
   if (words.length === 0) return false;
-  if (!/^[A-Z]/.test(words[0])) return false;
-  return words.every(
-    (w) => w.length < 3 || !/^[a-z]/.test(w),
-  );
+  return words.every(capitalized);
+}
+
+/**
+ * 낱말 하나가 이름의 일부로 쓰인 꼴인가.
+ *
+ * 대문자로 시작하면 됩니다. 두 가지 예외가 있습니다.
+ *   - 두 글자 미만의 이음말(of·and·the)은 원래 소문자로 씁니다
+ *   - **소문자로 시작하는 상표**가 있습니다. `nVent Electric`(NVT) 이 그렇고,
+ *     iRobot·eBay 도 같은 꼴입니다. 뒤에 대문자가 있으면 이름으로 봅니다.
+ *     이걸 안 넣으면 nVent 기사가 통째로 안 걸립니다(실제로 그랬습니다).
+ */
+function capitalized(w: string): boolean {
+  if (w.length < 3) return true;
+  if (/^[A-Z]/.test(w)) return true;
+  return /^[a-z][A-Z]/.test(w);
 }
 
 /**
@@ -211,14 +233,24 @@ function properNoun(matched: string): boolean {
 export function enNamesIn(text: string): string[] {
   const hit = new Set<string>();
   for (const [name, ticker] of byName) {
+    /*
+     * **나온 자리를 전부 봅니다.** 처음 걸린 것만 보면 낱말 순서에 따라
+     * 답이 달라집니다. 실제로 이랬습니다(2026-08-27):
+     *   "lucid dreaming … Lucid shares rose"  → 못 잡음
+     *   "Lucid shares rose … lucid dreaming"  → 잡음
+     * "intel sources say Intel will delay the fab" 처럼 흔한 문장에서
+     * 종목을 통째로 놓칩니다. 하나라도 이름 꼴이면 걸린 것으로 봅니다.
+     */
     const re = new RegExp(
       `(^|[^A-Za-z0-9\\-])(${esc(name)})($|[^A-Za-z0-9\\-])`,
-      "i",
+      "gi",
     );
-    const m = text.match(re);
-    if (!m) continue;
-    if (!properNoun(m[2])) continue;
-    hit.add(ticker);
+    for (const m of text.matchAll(re)) {
+      if (properNoun(m[2])) {
+        hit.add(ticker);
+        break;
+      }
+    }
   }
   return [...hit];
 }

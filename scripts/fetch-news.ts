@@ -161,7 +161,23 @@ type MonthFile = { month: string; updatedAt: string; items: Archived[] };
 
 async function main() {
   // 한국어 피드와 영문 피드를 함께 받습니다. 한쪽이 죽어도 다른 쪽은 들어옵니다.
-  const [koItems, usItems] = await Promise.all([fetchNews(), fetchUsNews()]);
+  const dead: string[] = [];
+  const [koItems, usItems] = await Promise.all([
+    fetchNews(),
+    fetchUsNews((f) => dead.push(f.label)),
+  ]);
+
+  /*
+   * 피드는 조용히 죽습니다 — 주소가 바뀌거나 형식이 Atom 으로 바뀌면 예외
+   * 없이 0건이 됩니다. 그러면 몇 달 뒤에야 "요즘 기사가 적네" 하고 알게
+   * 됩니다. 실행 때마다 눈에 띄게 찍어 둡니다.
+   */
+  if (dead.length) {
+    console.warn(`[news] ⚠ 한 건도 못 받은 피드: ${dead.join(", ")}`);
+  }
+  if (koItems.length === 0) {
+    console.warn("[news] ⚠ 한국어 피드(SBHNews)에서 한 건도 못 받았습니다.");
+  }
 
   if (koItems.length === 0 && usItems.length === 0) {
     console.error("[news] 어느 피드도 읽지 못했습니다. 기존 아카이브를 그대로 둡니다.");

@@ -69,7 +69,39 @@ const CASES: Case[] = [
     why: "한 문장에 둘",
   },
 
+  // ── 2026-08-27 점검에서 실제로 놓치고 있던 것 ──────────────
+  {
+    text: "intel sources say Intel will delay the fab",
+    want: ["INTC"],
+    why: "나온 자리를 전부 봐야 함 — 처음 걸린 소문자만 보고 포기했었다",
+  },
+  {
+    text: "lucid dreaming study published; Lucid shares rose 4%",
+    want: ["LCID"],
+    why: "같은 이유. 낱말 순서에 따라 답이 달라지면 안 된다",
+  },
+  {
+    text: "nVent Electric lifts outlook on data center demand",
+    want: ["NVT"],
+    why: "소문자로 시작하는 상표(nVent·iRobot 꼴)",
+  },
+  {
+    text: "Boeing wins a 200-plane order from Emirates",
+    want: ["BA"],
+    why: "야후는 'The Boeing Company' 라 주는데 기사는 'Boeing' 이라 쓴다",
+  },
+  {
+    text: "Bank of New York Mellon raised its dividend",
+    want: ["BNY"],
+    why: "같은 이유 — 앞의 The 를 떼야 걸린다",
+  },
+
   // ── 절대 걸리면 안 되는 것 ─────────────────────────────────
+  {
+    text: "Bank shares rose across the sector",
+    never: ["BNY"],
+    why: "The 를 떼면서 'Bank' 가 첫 낱말이 됐다. 전체 이름일 때만 잡아야",
+  },
   {
     text: "Fed Chair Jerome Powell signals a pause in rate cuts",
     never: ["POWL"],

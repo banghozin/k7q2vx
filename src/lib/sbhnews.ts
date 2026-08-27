@@ -13,6 +13,7 @@
  */
 
 import { hasName } from "./korean-match";
+import { safeLink, trimTitle } from "./usnews";
 
 export const SBH = {
   feed: "https://www.sbhnews.com/feed.xml",
@@ -56,10 +57,11 @@ export function parseFeed(xml: string): NewsItem[] {
   const blocks = xml.match(/<item>[\s\S]*?<\/item>/g) ?? [];
   for (const b of blocks) {
     const title = pick(b, "title");
-    const link = pick(b, "link");
+    // 남이 주는 주소를 그대로 href 에 넣지 않습니다 — usnews.ts 의 설명 참고
+    const link = safeLink(pick(b, "link"));
     if (!title || !link) continue;
     items.push({
-      title,
+      title: trimTitle(title),
       link,
       description: pick(b, "description"),
       pubDate: pick(b, "pubDate"),

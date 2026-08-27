@@ -118,19 +118,47 @@ function sane(d: Date): boolean {
   return age > -6 * 3600_000 && age < 45 * 86400_000;
 }
 
+/**
+ * 남이 주는 주소를 그대로 `href` 에 넣지 않습니다.
+ *
+ * 피드는 우리가 통제하지 않는 서버가 만듭니다. `javascript:` 나 `data:` 가
+ * 섞여 오면 그대로 링크가 되고, `/foo` 같은 상대경로는 **우리 도메인**으로
+ * 풀려 엉뚱한 곳을 가리킵니다. http(s) 절대주소만 받습니다.
+ */
+export function safeLink(raw: string): string | null {
+  try {
+    const u = new URL(raw);
+    return u.protocol === "http:" || u.protocol === "https:" ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 제목 길이 상한.
+ *
+ * 대부분 100자 안쪽이지만 본문이 통째로 들어오는 피드가 있습니다. 그대로 두면
+ * 화면이 무너지고 아카이브도 부풉니다.
+ */
+const MAX_TITLE = 300;
+
+export function trimTitle(t: string): string {
+  return t.length > MAX_TITLE ? `${t.slice(0, MAX_TITLE - 1)}…` : t;
+}
+
 export function parseUsFeed(xml: string, source: string): UsNewsItem[] {
   const out: UsNewsItem[] = [];
   for (const b of xml.match(/<item>[\s\S]*?<\/item>/g) ?? []) {
     const title = pick(b, "title");
-    const link = pick(b, "link");
+    const link = safeLink(pick(b, "link"));
     if (!title || !link) continue;
     const raw = pick(b, "pubDate") || pick(b, "dc:date");
     const d = new Date(raw);
     if (!sane(d)) continue;
     out.push({
-      title,
+      title: trimTitle(title),
       link,
-      description: pick(b, "description"),
+      description: pick(b, "description").slice(0, 600),
       pubDate: d.toISOString(),
       source,
     });
@@ -154,18 +182,27 @@ async function fetchOne(feed: UsFeed): Promise<UsNewsItem[]> {
   }
 }
 
-/** 전체 피드를 받아 최신순으로 합칩니다. 같은 링크는 한 번만. */
-export async function fetchUsNews(): Promise<UsNewsItem[]> {
+/**
+ * 전체 피드를 받아 최신순으로 합칩니다. 같은 링크는 한 번만.
+ *
+ * @param onDead 한 건도 못 받은 피드를 알려줍니다. 피드는 조용히 죽습니다 —
+ *               주소가 바뀌거나 형식이 Atom 으로 바뀌면 예외 없이 0건이 됩니다.
+ *               수집 스크립트가 이걸 받아 화면에 찍습니다.
+ */
+export async function fetchUsNews(
+  onDead?: (feed: UsFeed) => void,
+): Promise<UsNewsItem[]> {
   const all = await Promise.all(US_FEEDS.map(fetchOne));
   const seen = new Set<string>();
   const out: UsNewsItem[] = [];
-  for (const items of all) {
+  all.forEach((items, i) => {
+    if (items.length === 0) onDead?.(US_FEEDS[i]);
     for (const it of items) {
       if (seen.has(it.link)) continue;
       seen.add(it.link);
       out.push(it);
     }
-  }
+  });
   out.sort((a, b) => (a.pubDate < b.pubDate ? 1 : -1));
   return out;
 }
