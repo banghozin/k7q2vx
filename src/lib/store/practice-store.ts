@@ -1,7 +1,8 @@
 "use client";
 
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { persist } from "zustand/middleware";
+import { deviceStorage } from "./device-storage";
 
 /**
  * 차트 훈련 기록. **브라우저(localStorage)에만** 저장됩니다. 서버로 가지 않고
@@ -106,7 +107,7 @@ export const usePractice = create<State & Actions>()(
     }),
     {
       name: "thememap.practice.v1",
-      storage: createJSONStorage(() => localStorage),
+      storage: deviceStorage(),
       partialize: (s) => ({ sessions: s.sessions }) as State & Actions,
       onRehydrateStorage: () => (s) => s?.setHydrated(),
     },

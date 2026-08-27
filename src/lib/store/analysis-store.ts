@@ -1,7 +1,8 @@
 "use client";
 
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { persist } from "zustand/middleware";
+import { deviceStorage } from "./device-storage";
 import type { SavedDrawing } from "@/components/practice/kline";
 
 /**
@@ -128,7 +129,7 @@ export const useAnalysis = create<State & Actions>()(
     }),
     {
       name: "thememap.analysis.v1",
-      storage: createJSONStorage(() => localStorage),
+      storage: deviceStorage(),
       partialize: (s) => ({ sheets: s.sheets }) as State & Actions,
       onRehydrateStorage: () => (s) => s?.setHydrated(),
     },

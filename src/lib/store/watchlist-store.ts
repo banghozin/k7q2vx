@@ -1,7 +1,8 @@
 "use client";
 
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import { persist } from "zustand/middleware";
+import { deviceStorage } from "./device-storage";
 
 /**
  * 별표한 종목. 브라우저(localStorage)에만 저장됩니다. 서버로 가지 않습니다.
@@ -55,7 +56,7 @@ export const useWatchlist = create<State & Actions>()(
     }),
     {
       name: "thememap.watchlist.v1",
-      storage: createJSONStorage(() => localStorage),
+      storage: deviceStorage(),
       partialize: (s) => ({ items: s.items }),
       onRehydrateStorage: () => (state) => state?.setHydrated(),
     },

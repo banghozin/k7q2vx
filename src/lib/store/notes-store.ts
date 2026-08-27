@@ -1,7 +1,8 @@
 "use client";
 
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import { persist } from "zustand/middleware";
+import { deviceStorage } from "./device-storage";
 import type { SavedDrawing } from "@/components/practice/kline";
 
 /**
@@ -164,7 +165,7 @@ export const useNotes = create<State & Actions>()(
     }),
     {
       name: "thememap.notes.v1",
-      storage: createJSONStorage(() => localStorage),
+      storage: deviceStorage(),
       partialize: (s) => ({ trades: s.trades, settings: s.settings }),
       onRehydrateStorage: () => (state) => state?.setHydrated(),
     },
