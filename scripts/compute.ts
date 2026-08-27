@@ -925,6 +925,93 @@ async function main() {
     }
   }
 
+  /* ── 층 전체가 움직였나, 이 종목만 움직였나 ──────────────────
+   *
+   * 밤에 종목이 빠졌을 때 가장 먼저 궁금한 것은 "업계 전체 문제인가, 이
+   * 회사만의 문제인가" 입니다. CLAUDE.md 가 적어 둔 물음 그대로입니다.
+   *
+   * 답하는 방법은 간단합니다. 그 종목이 크게 움직인 날, **같은 층의 나머지
+   * 종목들도 같이 움직였는지** 중앙값으로 보면 됩니다. 중앙값을 쓰는 이유는
+   * 층 안의 한 종목이 실적으로 튀어도 층 전체가 왜곡되지 않게 하기 위해서고,
+   * 자기 자신을 빼고 세는 이유는 그러지 않으면 구성원이 적은 층에서 자기가
+   * 자기를 설명하게 되기 때문입니다.
+   *
+   * **판정은 사실 서술까지만 합니다.** "그러니 사라/팔아라" 로 넘어가지
+   * 않습니다.
+   */
+  type MoveVerdict = "layer" | "solo" | "mixed";
+
+  type MoveLayer = {
+    theme: string;
+    n: number;
+    /** 같은 층에서 자기를 뺀 나머지의 중앙값 (%) */
+    median1: number | null;
+    median5: number | null;
+    /** 중앙값을 낸 표본 수 */
+    peers: number;
+    verdict1: MoveVerdict | null;
+    verdict5: MoveVerdict | null;
+  };
+
+  /** 이 정도는 움직여야 "움직였다"고 보고 판정합니다 */
+  const MOVE_MIN_1 = 2;
+  const MOVE_MIN_5 = 4;
+
+  function verdictOf(
+    own: number | null,
+    peer: number | null,
+    minMove: number,
+  ): MoveVerdict | null {
+    if (own == null || peer == null) return null;
+    if (Math.abs(own) < minMove) return null; // 잠잠한 날은 판정하지 않습니다
+    // 층이 반대로 갔거나 거의 안 움직였으면 이 종목만의 일입니다
+    if (peer * own <= 0 || Math.abs(peer) < Math.abs(own) * 0.3) return "solo";
+    if (Math.abs(peer) >= Math.abs(own) * 0.6) return "layer";
+    return "mixed";
+  }
+
+  const moves: Record<string, { ret1: number | null; ret5: number | null; layers: MoveLayer[] }> = {};
+
+  for (const theme of THEMES) {
+    for (const layer of theme.layers) {
+      const members = layer.stocks.map((s) => s.ticker.toUpperCase());
+      if (members.length < 2) continue; // 혼자 있는 층은 비교 상대가 없습니다
+
+      for (const t of members) {
+        const own = stocks[t];
+        if (!own) continue;
+
+        const peers = members.filter((m) => m !== t && stocks[m]);
+        const m1 = median(
+          peers.map((p) => stocks[p].ret1).filter((x): x is number => x != null),
+        );
+        const m5 = median(
+          peers.map((p) => stocks[p].ret5).filter((x): x is number => x != null),
+        );
+
+        const row: MoveLayer = {
+          theme: theme.slug,
+          n: layer.n,
+          median1: m1 != null ? round(m1) : null,
+          median5: m5 != null ? round(m5) : null,
+          peers: peers.length,
+          /*
+           * 비교 상대가 하나뿐이면 그건 중앙값이 아니라 그냥 그 한 종목입니다.
+           * 그걸로 "층 전체" 를 말하면 과장입니다. 표본이 둘 이상일 때만
+           * 판정하고, 아니면 숫자만 보여 주고 읽는 사람에게 맡깁니다.
+           */
+          verdict1: peers.length >= 2 ? verdictOf(own.ret1, m1, MOVE_MIN_1) : null,
+          verdict5: peers.length >= 2 ? verdictOf(own.ret5, m5, MOVE_MIN_5) : null,
+        };
+
+        if (!moves[t]) {
+          moves[t] = { ret1: own.ret1, ret5: own.ret5, layers: [] };
+        }
+        moves[t].layers.push(row);
+      }
+    }
+  }
+
   /* ── 저장 ────────────────────────────────────────────────────── */
 
   await mkdir(OUT_DIR, { recursive: true });
@@ -941,6 +1028,15 @@ async function main() {
     ["layers.json", { ...meta, themes: layers }],
     ["sync.json", { ...meta, minEvents: MIN_EVENTS, themes: sync }],
     ["leaders.json", { ...meta, themes: leaders }],
+    [
+      "moves.json",
+      {
+        ...meta,
+        minMove: { d1: MOVE_MIN_1, d5: MOVE_MIN_5 },
+        stocks: moves,
+        note: "그 종목이 크게 움직인 날 같은 층의 나머지도 같이 움직였는지 센 것입니다. 지나간 하루의 기록이며 앞날에 대한 말이 아닙니다.",
+      },
+    ],
     [
       "rotation.json",
       {

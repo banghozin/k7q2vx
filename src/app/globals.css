@@ -1141,6 +1141,105 @@ tbody tr:hover {
   color: var(--brass-dim);
 }
 
+/* ── 층 전체였나, 이 종목만이었나 ───────────────────────────────── */
+
+.mv {
+  margin-top: 1.25rem;
+  border-top: 1px solid var(--rule-soft);
+  padding-top: 0.9rem;
+}
+
+.mv__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.64rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 0.6rem;
+}
+
+.mv__asof {
+  margin-left: auto;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-4);
+}
+
+.mv__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mv__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--rule-soft);
+  font-size: 0.82rem;
+}
+
+.mv__row:first-child {
+  border-top: none;
+}
+
+.mv__where {
+  text-decoration: none;
+  color: var(--ink-2);
+}
+
+.mv__where:hover {
+  color: var(--brass);
+}
+
+.mv__lname {
+  color: var(--ink-4);
+  font-size: 0.75rem;
+  margin-left: 0.35rem;
+}
+
+.mv__num {
+  font-size: 0.76rem;
+  color: var(--ink-3);
+}
+
+.mv__peers {
+  color: var(--ink-4);
+}
+
+.mv__tag {
+  margin-left: auto;
+  font-size: 0.7rem;
+  padding: 0.12rem 0.42rem;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+.mv--layer {
+  color: var(--brass);
+}
+
+.mv--solo {
+  color: var(--ink-2);
+}
+
+.mv--mixed {
+  color: var(--ink-4);
+}
+
+.mv__note {
+  font-size: 0.72rem;
+  color: var(--ink-4);
+  line-height: 1.6;
+  margin: 0.6rem 0 0;
+}
+
 /* ── 보관된 기사 목록 ─────────────────────────────────────────────── */
 
 .arcnews {

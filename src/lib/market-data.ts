@@ -17,6 +17,7 @@ import leadersJson from "@/data/generated/leaders.json";
 import briefingJson from "@/data/generated/briefing.json";
 import rotationJson from "@/data/generated/rotation.json";
 import historyJson from "@/data/generated/briefing-history.json";
+import movesJson from "@/data/generated/moves.json";
 
 export type StockMetrics = {
   last: number | null;
@@ -29,6 +30,27 @@ export type StockMetrics = {
   volRatio: number | null;
   pos52: number | null;
   bars: number;
+};
+
+/** "층 전체가 움직였나, 이 종목만인가" 판정 */
+export type MoveVerdict = "layer" | "solo" | "mixed";
+
+export type MoveLayer = {
+  theme: string;
+  n: number;
+  /** 같은 층에서 자기를 뺀 나머지의 중앙값 (%) */
+  median1: number | null;
+  median5: number | null;
+  /** 중앙값을 낸 표본 수 */
+  peers: number;
+  verdict1: MoveVerdict | null;
+  verdict5: MoveVerdict | null;
+};
+
+export type StockMove = {
+  ret1: number | null;
+  ret5: number | null;
+  layers: MoveLayer[];
 };
 
 export type LayerHeat = {
@@ -153,6 +175,11 @@ const rotationData = rotationJson as unknown as Meta & {
   themes: Record<string, ThemeRotation>;
 };
 
+const movesData = movesJson as unknown as Meta & {
+  minMove: { d1: number; d5: number };
+  stocks: Record<string, StockMove>;
+};
+
 /* ── 지난 브리핑 ─────────────────────────────────────────────────── */
 
 /** 하루치 기록. briefing.json 에서 뒤에 다시 볼 것만 남긴 것 */
@@ -220,6 +247,24 @@ export const hasMarketData = Boolean(
 
 export function getStock(ticker: string): StockMetrics | null {
   return stocksData?.stocks?.[ticker.toUpperCase()] ?? null;
+}
+
+/**
+ * 이 종목이 크게 움직인 날, 같은 층의 나머지도 같이 움직였는가.
+ *
+ * 밤에 종목이 빠졌을 때 가장 먼저 궁금한 것 — "업계 전체 문제인가, 이
+ * 회사만의 문제인가" 에 답하는 자리입니다. 판정이 없는 층(잠잠했거나 비교
+ * 상대가 하나뿐)은 숫자만 들어 있습니다.
+ */
+export function getMove(ticker: string): StockMove | null {
+  return movesData?.stocks?.[ticker.toUpperCase()] ?? null;
+}
+
+/** 판정이 실제로 붙은 층만 — 화면에 내보낼 것 */
+export function judgedLayers(ticker: string): MoveLayer[] {
+  const m = getMove(ticker);
+  if (!m) return [];
+  return m.layers.filter((l) => l.verdict1 != null || l.verdict5 != null);
 }
 
 export function getLayerHeat(themeSlug: string): LayerHeat[] {

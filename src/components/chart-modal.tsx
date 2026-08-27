@@ -7,6 +7,7 @@ import { useNotes } from "@/lib/store/notes-store";
 import { nameOf, placementsOf } from "@/data/themes";
 import { CandleChart, type Candle, type TradeMarker } from "./candle-chart";
 import { StarButton } from "./star-button";
+import { MoveVerdictBlock } from "./move-verdict";
 
 const RANGES = [
   { key: "3mo", label: "3개월" },
@@ -230,6 +231,8 @@ export function ChartModal() {
           {state === "idle" && data && data.candles.length > 0 && (
             <CandleChart candles={data.candles} markers={markers} />
           )}
+
+          <MoveVerdictBlock ticker={ticker} onNavigate={close} />
 
           {markers.length > 0 && (
             <p style={{ fontSize: ".76rem", color: "var(--ink-4)", margin: ".5rem 0 0" }}>
