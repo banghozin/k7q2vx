@@ -8,6 +8,8 @@ import { usePractice } from "@/lib/store/practice-store";
 import { useChartPrefs } from "@/lib/store/chart-prefs-store";
 import { Kline, type KlineHandle, type Pen } from "./kline";
 import { HandIcon } from "./hand-icon";
+import { ToolButton } from "./tool-button";
+import { INDICATOR_ICONS, TOOL_ICONS } from "./tool-icons";
 import { PracticeLog } from "./practice-log";
 
 /**
@@ -792,41 +794,45 @@ export function PracticeBoard() {
           */}
           <section>
             <h2>다루기</h2>
-            <div className="prac__grid">
+            {/* 모양이 아니라 모드라서 이름을 함께 답니다 (분석 화면과 같음) */}
+            <div className="prac__grid prac__grid--one">
               <button
                 type="button"
-                className="prac__tool"
+                className="prac__tool prac__tool--mode"
                 aria-pressed={tool === null}
-                title="도구를 놓습니다 (Esc)"
+                title="도구를 놓습니다. 화면을 끌고, 그은 선을 눌러 고칩니다 (Esc)"
                 onClick={() => {
                   stopDraw();
                   setPanelOpen(false);
                 }}
               >
-                <HandIcon /> 이동·선택
+                <HandIcon />
+                <span>이동·선택</span>
               </button>
             </div>
           </section>
 
+          {/* 도구는 그림으로 둡니다 — 글자만 늘어놓으면 눈에 안 걸립니다 */}
           {DRAW_GROUPS.map((g) => (
             <section key={g.title}>
               <h2>{g.title}</h2>
               <div className="prac__grid">
-                {g.tools.map((t) => (
-                  <button
-                    key={t.key}
-                    type="button"
-                    className="prac__tool"
-                    aria-pressed={tool === t.key}
-                    title={t.hint}
-                    onClick={() => {
-                      armTool(t.key);
-                      setPanelOpen(false);
-                    }}
-                  >
-                    {t.label}
-                  </button>
-                ))}
+                {g.tools.map((t) => {
+                  const Icon = TOOL_ICONS[t.key];
+                  return (
+                    <ToolButton
+                      key={t.key}
+                      icon={Icon ? <Icon /> : null}
+                      label={t.label}
+                      hint={t.hint}
+                      pressed={tool === t.key}
+                      onClick={() => {
+                        armTool(t.key);
+                        setPanelOpen(false);
+                      }}
+                    />
+                  );
+                })}
               </div>
             </section>
           ))}
@@ -877,27 +883,32 @@ export function PracticeBoard() {
           <section>
             <h2>보조지표</h2>
             <div className="prac__grid">
-              {INDICATORS.map((i) => (
-                <button
-                  key={i.key}
-                  type="button"
-                  className="prac__tool"
-                  aria-pressed={activeInd.has(i.key)}
-                  onClick={() => {
-                    const on = chart.current?.toggleIndicator(i.key, i.onCandle);
-                    setActiveInd((prev) => {
-                      const next = new Set(prev);
-                      if (on) next.add(i.key);
-                      else next.delete(i.key);
-                      // 다음 판에도 그대로 켜져 있게 적어 둡니다
-                      rememberInd("practice", [...next]);
-                      return next;
-                    });
-                  }}
-                >
-                  {i.label}
-                </button>
-              ))}
+              {INDICATORS.map((i) => {
+                const Icon = INDICATOR_ICONS[i.key];
+                return (
+                  <button
+                    key={i.key}
+                    type="button"
+                    className="prac__tool prac__tool--ind"
+                    aria-pressed={activeInd.has(i.key)}
+                    onClick={() => {
+                      const on = chart.current?.toggleIndicator(i.key, i.onCandle);
+                      setActiveInd((prev) => {
+                        const next = new Set(prev);
+                        if (on) next.add(i.key);
+                        else next.delete(i.key);
+                        // 다음 판에도 그대로 켜져 있게 적어 둡니다
+                        rememberInd("practice", [...next]);
+                        return next;
+                      });
+                    }}
+                  >
+                    {/* 지표는 이름이 짧고 굳은 말이라 글자를 지우지 않습니다 */}
+                    {Icon && <Icon />}
+                    <span>{i.label}</span>
+                  </button>
+                );
+              })}
             </div>
             <p className="prac__penhint">켜 둔 것은 다음 판에도 그대로입니다.</p>
           </section>

@@ -1493,6 +1493,109 @@ tbody tr:hover {
   color: var(--ink);
 }
 
+/*
+ * 그림만 있는 도구 단추.
+ *
+ * 글자로만 늘어놓으면 "추세선 / 연장선 / 반직선" 이 읽어야 구분되고, 서랍을
+ * 훑을 때 아무것도 눈에 안 걸립니다. 그림이면 모양 자체가 무엇을 긋는지
+ * 말해 줍니다. 이름은 올려놓으면 뜨는 이름표가 맡습니다.
+ *
+ * 넓은 화면에서만 글자를 감춥니다 — 손가락에는 "올려놓기" 가 없어서,
+ * 좁은 화면에서는 글자를 그대로 둬야 무엇인지 알 수 있습니다.
+ */
+.prac__tool--icon {
+  flex-direction: column;
+  gap: 0.28rem;
+  padding: 0.6rem 0.3rem;
+  min-height: 3.1rem;
+}
+
+.prac__tool--icon svg {
+  display: block;
+}
+
+.prac__tool--icon .prac__tool__name {
+  display: none;
+  font-size: 0.62rem;
+  line-height: 1.15;
+  text-align: center;
+  letter-spacing: -0.01em;
+}
+
+/* 한 칸짜리 — 모드 단추처럼 혼자 있는 것 */
+.prac__grid--one {
+  grid-template-columns: 1fr;
+}
+
+/* 모드 단추는 그림과 이름을 나란히. 지금 어느 쪽인지 늘 보여야 합니다 */
+.prac__tool--mode {
+  gap: 0.4rem;
+  padding: 0.6rem 0.5rem;
+}
+
+/* 지표는 그림과 글자를 나란히 */
+.prac__tool--ind {
+  gap: 0.35rem;
+}
+
+.prac__tool--ind svg {
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.prac__tool--ind[aria-pressed="true"] svg {
+  opacity: 1;
+}
+
+/*
+ * 떠오르는 이름표.
+ *
+ * 도구 서랍이 스크롤 통이라 그 안에 두면 잘립니다. 그래서 문서 맨 위에
+ * 그리고 좌표만 계산해 붙입니다(tool-button.tsx 참고).
+ */
+.tooltip {
+  position: fixed;
+  z-index: 90;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.45rem 0.6rem;
+  background: var(--panel-2);
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  animation: tipin 0.11s ease-out;
+}
+
+.tooltip b {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.tooltip i {
+  font-style: normal;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  color: var(--ink-3);
+}
+
+@keyframes tipin {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) scale(0.97);
+  }
+}
+
+/* 움직임을 줄여 달라고 한 기기에서는 그냥 나타납니다 */
+@media (prefers-reduced-motion: reduce) {
+  .tooltip {
+    animation: none;
+  }
+}
+
 .prac__tool[aria-pressed="true"] {
   background: var(--brass);
   color: #16130c;
@@ -2196,6 +2299,15 @@ tbody tr:hover {
 
   .prac__grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  /*
+   * 손가락에는 "올려놓기" 가 없습니다. 눌리면 곧바로 도구가 켜지므로 이름표가
+   * 뜰 틈도 없고요. 그래서 좁은 화면에서는 그림 아래에 글자를 그대로 둡니다.
+   * 서랍이 17rem 이라 자리도 넉넉합니다.
+   */
+  .prac__tool--icon .prac__tool__name {
+    display: block;
   }
 
   /* 손가락으로 누를 크기 */

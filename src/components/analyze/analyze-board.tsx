@@ -10,7 +10,9 @@ import {
   type SavedDrawing,
 } from "@/components/practice/kline";
 import { HandIcon } from "@/components/practice/hand-icon";
-import { recentSheets, useAnalysis } from "@/lib/store/analysis-store";
+import { ToolButton } from "@/components/practice/tool-button";
+import { INDICATOR_ICONS, TOOL_ICONS } from "@/components/practice/tool-icons";
+import { recentSheets, sheetKey, useAnalysis } from "@/lib/store/analysis-store";
 import { useChartPrefs } from "@/lib/store/chart-prefs-store";
 import { useNotes } from "@/lib/store/notes-store";
 import {
@@ -27,9 +29,10 @@ import {
  * **지금 보고 있는 종목에 실제로 선을 긋는 곳**입니다. 종목을 고르고, 봉
  * 단위를 고르고, 추세선·피보나치·파동을 그어 둡니다.
  *
- * **그린 것은 이 기기에 남습니다.** 다음에 같은 종목·같은 봉 단위로 들어오면
- * 그대로 다시 나타납니다. 좌표를 화면 위치가 아니라 시각·가격으로 적어 두기
- * 때문에 확대·축소를 해도 자리가 어긋나지 않습니다.
+ * **그린 것은 이 기기에 남습니다.** 다음에 같은 종목으로 들어오면 그대로 다시
+ * 나타나고, **봉 단위를 바꿔도 남습니다.** 좌표를 화면 위치가 아니라 시각·가격
+ * 으로 적어 두기 때문에, 확대·축소를 하든 주봉에서 일봉으로 내려오든 같은
+ * 자리를 지나갑니다.
  *
  * 여기 그린 것은 **내 생각을 적어 둔 것**이지 이 사이트의 의견이 아닙니다.
  */
@@ -301,7 +304,14 @@ export function AnalyzeBoard({
       setSavedAt(review.chart.at);
     } else {
       // 저장해 둔 것이 있으면 그대로 다시 그립니다
-      const sheet = sheets[`${ticker}:${tfKey}`];
+      /*
+       * 봉 단위와 무관하게 **그 종목에 그려 둔 것 전부**를 올립니다.
+       *
+       * 좌표가 시각·가격이라 봉 단위가 달라도 같은 자리에 그려집니다. 주봉에
+       * 그은 추세선이 일봉에서도 같은 자리를 지나가는 것이 맞습니다 — 그래야
+       * 큰 흐름과 지금 자리를 겹쳐 볼 수 있습니다.
+       */
+      const sheet = sheets[sheetKey(ticker)];
       if (sheet?.drawings.length) {
         chart.current?.importDrawings(sheet.drawings);
         setSavedAt(sheet.updatedAt);
@@ -749,45 +759,52 @@ export function AnalyzeBoard({
           */}
           <section>
             <h2>다루기</h2>
-            <div className="prac__grid">
+            {/*
+              이건 모양을 긋는 도구가 아니라 **모드**입니다. 지금 어느 쪽인지가
+              늘 보여야 하므로 그림만 두지 않고 이름을 함께 답니다. 한 칸짜리라
+              가로로 꽉 채웁니다 — 2열로 두면 옆이 비어 어설픕니다.
+            */}
+            <div className="prac__grid prac__grid--one">
               <button
                 type="button"
-                className="prac__tool"
+                className="prac__tool prac__tool--mode"
                 aria-pressed={tool === null}
-                title="도구를 놓습니다 (Esc)"
+                title="도구를 놓습니다. 화면을 끌고, 그은 선을 눌러 고칩니다 (Esc)"
                 onClick={() => {
                   stopDraw();
                   setPanelOpen(false);
                 }}
               >
-                <HandIcon /> 이동·선택
+                <HandIcon />
+                <span>이동·선택</span>
               </button>
             </div>
           </section>
 
+          {/* 도구는 그림으로 둡니다 — 글자만 늘어놓으면 눈에 안 걸립니다 */}
           {DRAW_GROUPS.map((g) => (
             <section key={g.title}>
               <h2>{g.title}</h2>
               <div className="prac__grid">
-                {g.tools.map((t) => (
-                  <button
-                    key={t.key}
-                    type="button"
-                    className="prac__tool"
-                    aria-pressed={tool === t.key}
-                    title={t.hint}
-                    onClick={() => {
-                      armTool(t.key);
-                      setPanelOpen(false);
-                    }}
-                  >
-                    {t.label}
-                  </button>
-                ))}
+                {g.tools.map((t) => {
+                  const Icon = TOOL_ICONS[t.key];
+                  return (
+                    <ToolButton
+                      key={t.key}
+                      icon={Icon ? <Icon /> : null}
+                      label={t.label}
+                      hint={t.hint}
+                      pressed={tool === t.key}
+                      onClick={() => {
+                        armTool(t.key);
+                        setPanelOpen(false);
+                      }}
+                    />
+                  );
+                })}
               </div>
             </section>
           ))}
-
           {!reviewing && (
             <section>
               <h2>자동으로 찾기</h2>
@@ -867,30 +884,39 @@ export function AnalyzeBoard({
           <section>
             <h2>보조지표</h2>
             <div className="prac__grid">
-              {INDICATORS.map((ind) => (
-                <button
-                  key={ind.key}
-                  type="button"
-                  className="prac__tool"
-                  aria-pressed={activeInd.has(ind.key)}
-                  onClick={() => {
-                    const on = chart.current?.toggleIndicator(
-                      ind.key,
-                      ind.onCandle,
-                    );
-                    setActiveInd((s) => {
-                      const next = new Set(s);
-                      if (on) next.add(ind.key);
-                      else next.delete(ind.key);
-                      // 다음에 들어와도 그대로 켜져 있게 적어 둡니다
-                      rememberInd("analyze", [...next]);
-                      return next;
-                    });
-                  }}
-                >
-                  {ind.label}
-                </button>
-              ))}
+              {INDICATORS.map((ind) => {
+                const Icon = INDICATOR_ICONS[ind.key];
+                return (
+                  <button
+                    key={ind.key}
+                    type="button"
+                    className="prac__tool prac__tool--ind"
+                    aria-pressed={activeInd.has(ind.key)}
+                    onClick={() => {
+                      const on = chart.current?.toggleIndicator(
+                        ind.key,
+                        ind.onCandle,
+                      );
+                      setActiveInd((s) => {
+                        const next = new Set(s);
+                        if (on) next.add(ind.key);
+                        else next.delete(ind.key);
+                        // 다음에 들어와도 그대로 켜져 있게 적어 둡니다
+                        rememberInd("analyze", [...next]);
+                        return next;
+                      });
+                    }}
+                  >
+                    {/*
+                      지표는 그림만 두지 않습니다. 이름이 짧고(이동평균·볼린저)
+                      업계에서 굳은 말이라 글자가 더 빨리 읽힙니다. 그림은
+                      목록에서 눈이 걸리게 하는 역할만 합니다.
+                    */}
+                    {Icon && <Icon />}
+                    <span>{ind.label}</span>
+                  </button>
+                );
+              })}
             </div>
             <p className="prac__penhint">켜 둔 것은 다음에 들어와도 그대로입니다.</p>
           </section>
@@ -962,8 +988,9 @@ export function AnalyzeBoard({
 
       <footer className="prac__foot">
         <span className="prac__ask">
-          그린 것은 <b>이 기기에 저장</b>됩니다. 같은 종목·같은 봉 단위로 다시
-          오면 그대로 있습니다.
+          그린 것은 <b>이 기기에 저장</b>됩니다. 같은 종목으로 다시 오면 그대로
+          있고, <b>봉 단위를 바꿔도 남습니다</b> — 시각과 가격에 박아 두기
+          때문입니다.
         </span>
       </footer>
     </div>
