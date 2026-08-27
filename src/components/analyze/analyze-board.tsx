@@ -248,6 +248,9 @@ export function AnalyzeBoard({
   useEffect(() => {
     if (!chartReady || feed.length === 0) return;
     chart.current?.clearDrawings();
+    // 종목·봉 단위가 바뀌면 앞서 자동으로 그린 것의 id 도 무효가 됩니다
+    swingIdsRef.current = [];
+    fibRef.current = null;
     chart.current?.setData(feed, tfNow.period);
     const w = chart.current?.width() ?? 0;
     if (w > 0) chart.current?.fitAll(w < 640 ? 90 : 240);
@@ -365,9 +368,22 @@ export function AnalyzeBoard({
     return { threshold, swings: detectSwings(src, threshold) };
   }, [bars, sens]);
 
+  /*
+   * 이 단추로 그린 선들의 id.
+   *
+   * 민감도를 바꾸고 다시 누르면 **앞서 그린 것을 지우고** 새로 그립니다.
+   * 그러지 않으면 두 벌이 겹쳐 쌓입니다 — 촘촘히와 크게를 견줘 보려고
+   * 누르는 것이 보통이라 금세 지저분해집니다.
+   */
+  const swingIdsRef = useRef<string[]>([]);
+
   const drawSwings = useCallback(() => {
     const pts = swingInfo.swings.slice(-(MAX_LEGS + 1));
     if (pts.length < 2) return;
+
+    for (const id of swingIdsRef.current) chart.current?.removeDrawing(id);
+    swingIdsRef.current = [];
+
     const legs: SavedDrawing[] = [];
     for (let i = 1; i < pts.length; i++) {
       legs.push({
@@ -380,14 +396,28 @@ export function AnalyzeBoard({
         size: 1.2,
       });
     }
-    chart.current?.importDrawings(legs);
+    swingIdsRef.current = chart.current?.importDrawings(legs) ?? [];
     autoSave();
   }, [swingInfo, autoSave]);
+
+  /*
+   * 마지막으로 자동으로 그은 피보나치의 자리.
+   *
+   * 자동 피보나치는 늘 **마지막 파동**에 긋습니다. 그래서 연달아 누르면
+   * 똑같은 것이 같은 자리에 겹쳐 쌓입니다 — 보이지도 않고 쓸모도 없습니다.
+   * 민감도를 바꾸면 마지막 파동이 달라지므로 그때는 새로 긋습니다.
+   */
+  const fibRef = useRef<{ id: string; sig: string } | null>(null);
 
   const drawAutoFib = useCallback(() => {
     const leg = lastLeg(swingInfo.swings);
     if (!leg) return;
-    chart.current?.importDrawings([
+    const sig = `${leg[0].time}:${leg[0].price}-${leg[1].time}:${leg[1].price}`;
+    if (fibRef.current?.sig === sig) {
+      chart.current?.removeDrawing(fibRef.current.id);
+      fibRef.current = null;
+    }
+    const ids = chart.current?.importDrawings([
       {
         name: "fibRetracement",
         points: [
@@ -398,6 +428,7 @@ export function AnalyzeBoard({
         size: penRef.current.size,
       },
     ]);
+    if (ids?.[0]) fibRef.current = { id: ids[0], sig };
     autoSave();
   }, [swingInfo, autoSave]);
 
@@ -526,18 +557,18 @@ export function AnalyzeBoard({
           <strong>{review.entryDate} 진입 때 그려 뒀던 그림</strong>입니다.
           지금 그리는 분석이 아니고, 여기서 손댄 것은 저장되지 않습니다.
           <span className="anz__legend">
-            <em style={{ color: ENTRY_COLOR }}>■</em> 진입 $
+            <em style={{ color: ENTRY_COLOR }} aria-hidden="true">■</em> 진입 $
             {review.entryPrice}
             {review.stopPrice > 0 && (
               <>
                 {" "}
-                <em style={{ color: STOP_COLOR }}>■</em> 손절 ${review.stopPrice}
+                <em style={{ color: STOP_COLOR }} aria-hidden="true">■</em> 손절 ${review.stopPrice}
               </>
             )}
             {review.exitPrice != null && (
               <>
                 {" "}
-                <em style={{ color: EXIT_COLOR }}>■</em> 청산 ${review.exitPrice}
+                <em style={{ color: EXIT_COLOR }} aria-hidden="true">■</em> 청산 ${review.exitPrice}
               </>
             )}
           </span>

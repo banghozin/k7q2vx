@@ -58,7 +58,8 @@ export type KlineHandle = {
   /** 그려 둔 것을 저장할 수 있는 모양으로 꺼냅니다 */
   exportDrawings: () => SavedDrawing[];
   /** 저장해 둔 것을 도로 그립니다 */
-  importDrawings: (list: SavedDrawing[]) => void;
+  /** 저장해 둔 것을 도로 그리고, 만들어진 id 를 돌려줍니다 */
+  importDrawings: (list: SavedDrawing[]) => string[];
 };
 
 /**
@@ -434,7 +435,8 @@ export function Kline({
     },
     importDrawings(list) {
       const chart = chartRef.current;
-      if (!chart) return;
+      const made: string[] = [];
+      if (!chart) return made;
       for (const s of list) {
         const id = chart.createOverlay({
           name: s.name,
@@ -456,8 +458,12 @@ export function Kline({
             return false;
           },
         });
-        if (typeof id === "string") drawnRef.current.push(id);
+        if (typeof id === "string") {
+          drawnRef.current.push(id);
+          made.push(id);
+        }
       }
+      return made;
     },
   }));
 

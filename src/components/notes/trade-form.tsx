@@ -535,6 +535,7 @@ export function TradeForm({
                 <button
                   type="button"
                   className={`attach__opt${attachTf === null ? " is-on" : ""}`}
+                  aria-pressed={attachTf === null}
                   onClick={() => setAttachTf(null)}
                 >
                   안 붙임
@@ -544,6 +545,7 @@ export function TradeForm({
                     key={s.tf}
                     type="button"
                     className={`attach__opt${attachTf === s.tf ? " is-on" : ""}`}
+                    aria-pressed={attachTf === s.tf}
                     onClick={() => setAttachTf(s.tf)}
                   >
                     {s.tf} · 선 {s.drawings.length}개

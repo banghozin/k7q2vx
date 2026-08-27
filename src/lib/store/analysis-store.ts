@@ -47,6 +47,31 @@ type Actions = {
 export const sheetKey = (ticker: string, tf: string) =>
   `${ticker.toUpperCase()}:${tf}`;
 
+/**
+ * 보관할 최대 벌 수.
+ *
+ * localStorage 는 대략 5MB 에서 막히고, 넘치면 저장이 **예외를 던집니다.**
+ * 종목 하나에 봉 단위가 여덟이라 이것저것 눌러 보다 보면 생각보다 빨리
+ * 늡니다. 훈련 기록(`practice-store`)이 200벌에서 끊는 것과 같은 방식으로
+ * 오래 손대지 않은 것부터 버립니다. 그린 것이 없는 빈 벌은 먼저 버립니다.
+ */
+const MAX_SHEETS = 120;
+
+function capSheets(sheets: Record<string, Sheet>): Record<string, Sheet> {
+  const all = Object.values(sheets);
+  if (all.length <= MAX_SHEETS) return sheets;
+  const keep = all
+    .slice()
+    .sort((a, b) => {
+      const aEmpty = a.drawings.length === 0 && !a.memo.trim();
+      const bEmpty = b.drawings.length === 0 && !b.memo.trim();
+      if (aEmpty !== bEmpty) return aEmpty ? 1 : -1;
+      return a.updatedAt < b.updatedAt ? 1 : -1;
+    })
+    .slice(0, MAX_SHEETS);
+  return Object.fromEntries(keep.map((s) => [s.key, s]));
+}
+
 /** 최근에 손댄 것부터 */
 export function recentSheets(sheets: Record<string, Sheet>): Sheet[] {
   return Object.values(sheets)
@@ -63,19 +88,18 @@ export const useAnalysis = create<State & Actions>()(
         set((st) => {
           const key = sheetKey(ticker, tf);
           const prev = st.sheets[key];
-          return {
-            sheets: {
-              ...st.sheets,
-              [key]: {
-                key,
-                ticker: ticker.toUpperCase(),
-                tf,
-                updatedAt: new Date().toISOString(),
-                drawings,
-                memo: memo ?? prev?.memo ?? "",
-              },
+          const next: Record<string, Sheet> = {
+            ...st.sheets,
+            [key]: {
+              key,
+              ticker: ticker.toUpperCase(),
+              tf,
+              updatedAt: new Date().toISOString(),
+              drawings,
+              memo: memo ?? prev?.memo ?? "",
             },
           };
+          return { sheets: capSheets(next) };
         }),
       get: (ticker, tf) => get().sheets[sheetKey(ticker, tf)],
       setMemo: (key, memo) =>

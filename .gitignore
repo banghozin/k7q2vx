@@ -32,3 +32,4 @@ CLAUDE.md
 
 # 검증용 임시 하네스 — 공개 저장소이므로 실수로도 올라가면 안 됩니다
 public/_*.html
+scripts/_*.ts
