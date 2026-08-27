@@ -177,14 +177,24 @@ button {
   flex-shrink: 0;
 }
 
+/* 지층 도형 표식. 글자가 아니라 그림이라 글꼴이 없는 기기에서도 같습니다 */
 .brand__mark {
-  font-family: var(--font-sans), "Apple SD Gothic Neo", sans-serif;
-  font-size: 0.7rem;
-  letter-spacing: 0.22em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--brass);
   border: 1px solid var(--brass-dim);
-  padding: 0.15rem 0.4rem;
-  border-radius: 2px;
+  padding: 0.2rem 0.3rem;
+  border-radius: 3px;
+  line-height: 0;
+}
+
+.brand__mark svg {
+  display: block;
+}
+
+.brand:hover .brand__mark {
+  border-color: var(--brass);
 }
 
 .brand__name {
@@ -1405,6 +1415,28 @@ tbody tr:hover {
   display: none;
 }
 
+/*
+ * 이동·선택 단추.
+ *
+ * 도구가 물려 있는 동안에는 화면을 눌러도 전부 "새로 그리기" 로 먹혀서
+ * 그어 둔 선을 고칠 수가 없었습니다. 여기로 돌아오는 길이라 **도구 서랍
+ * 밖에** 둡니다 — 고칠 때마다 서랍을 열게 하면 안 됩니다.
+ *
+ * 켜져 있는 것이 기본 상태(아무 도구도 안 물린 상태)이므로, 눌린 표시를
+ * 도구 단추처럼 꽉 채우지 않고 테두리로만 알립니다. 그리는 중에는 꺼진
+ * 것처럼 보여서 "지금 그리는 중" 이 저절로 드러납니다.
+ */
+.prac__modebtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.prac__modebtn[aria-pressed="true"] {
+  border-color: var(--brass);
+  color: var(--brass);
+}
+
 /* ── 가운데: 도구 + 차트 ── */
 
 .prac__body {
@@ -1449,6 +1481,11 @@ tbody tr:hover {
   color: var(--ink-2);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
+  /* 손 표식이 붙는 단추가 있어 글자와 나란히 세웁니다 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
 }
 
 .prac__tool:hover {

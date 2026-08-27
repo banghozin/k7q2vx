@@ -31,6 +31,22 @@ export type KlineHandle = {
   /** 보조지표를 켜고 끕니다 */
   toggleIndicator: (name: string, onCandle: boolean) => boolean;
   /**
+   * 보조지표를 **이 목록 그대로** 맞춥니다.
+   *
+   * 저장해 둔 것을 되살릴 때 씁니다. `toggleIndicator` 로 되살리면 켜고 끄기라
+   * 한 번 더 불리는 순간 도로 꺼집니다 — 차트를 다시 만들 때(종목·봉단위를
+   * 바꿀 때) 실제로 그럴 수 있습니다. 몇 번을 불러도 결과가 같게 둡니다.
+   */
+  setIndicators: (list: { name: string; onCandle: boolean }[]) => void;
+  /**
+   * 그리기를 멈추고 **화면 이동·선택 모드**로 돌립니다.
+   *
+   * 도구가 물려 있는 동안에는 화면 아무 곳을 눌러도 "새로 그리기" 로 먹힙니다.
+   * 그래서 이미 그어 둔 선을 고르거나 점을 끌어 옮길 수가 없었습니다.
+   * 고른 것이 있으면 그 선택도 함께 풉니다.
+   */
+  stopDraw: () => void;
+  /**
    * 오른쪽에 빈 자리를 만듭니다.
    *
    * **이게 훈련의 핵심 장치입니다.** 마지막 봉 오른쪽에 여백이 있어야 앞날
@@ -90,6 +106,7 @@ export function Kline({
   onReady,
   onSelect,
   onDrawEnd,
+  onMoveEnd,
 }: {
   ref: React.Ref<KlineHandle>;
   onReady?: () => void;
@@ -97,6 +114,14 @@ export function Kline({
   onSelect?: (picked: { id: string; name: string } | null) => void;
   /** 하나를 다 그렸을 때. 같은 도구를 다시 물리는 데 씁니다 */
   onDrawEnd?: () => void;
+  /**
+   * 이미 그린 것을 **끌어서 옮기고 손을 뗐을 때.**
+   *
+   * 이게 없으면 자리를 옮겨 놓고 나갔다가 돌아왔을 때 **옮기기 전 자리로
+   * 되돌아가 있습니다.** 저장은 그릴 때·지울 때·색을 바꿀 때만 하고 있었고
+   * "옮겼을 때" 가 빠져 있었습니다.
+   */
+  onMoveEnd?: () => void;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -110,6 +135,35 @@ export function Kline({
   const pendingRef = useRef<string | null>(null);
   const drawEndRef = useRef(onDrawEnd);
   drawEndRef.current = onDrawEnd;
+  const moveEndRef = useRef(onMoveEnd);
+  moveEndRef.current = onMoveEnd;
+
+  /*
+   * 그린 것 하나에 거는 손잡이들.
+   *
+   * 새로 그릴 때(`startDraw`)와 저장해 둔 것을 되살릴 때(`importDrawings`)
+   * **똑같이** 걸어야 합니다. 예전에는 되살린 것에 `onPressedMoveEnd` 가
+   * 빠져 있어서, 다시 들어와 옮긴 것은 저장되지 않았습니다.
+   */
+  const overlayHooks = () => ({
+    onSelected: (e: { overlay: { id: string | number; name: string } }) => {
+      selectRef.current?.({ id: String(e.overlay.id), name: e.overlay.name });
+      return false;
+    },
+    onDeselected: () => {
+      selectRef.current?.(null);
+      return false;
+    },
+    onRemoved: () => {
+      selectRef.current?.(null);
+      return false;
+    },
+    onPressedMoveEnd: () => {
+      // 끌어 옮기고 손을 뗀 순간. 한 박자 뒤에 알려야 좌표가 확정돼 있습니다
+      setTimeout(() => moveEndRef.current?.(), 0);
+      return false;
+    },
+  });
 
   /** 그리다 만 도형을 물립니다 */
   const cancelPending = () => {
@@ -285,18 +339,7 @@ export function Kline({
       const id = chartRef.current?.createOverlay({
         name,
         styles: penStyles(pen),
-        onSelected: (e) => {
-          selectRef.current?.({ id: String(e.overlay.id), name: e.overlay.name });
-          return false;
-        },
-        onDeselected: () => {
-          selectRef.current?.(null);
-          return false;
-        },
-        onRemoved: () => {
-          selectRef.current?.(null);
-          return false;
-        },
+        ...overlayHooks(),
         /*
          * 하나를 다 그리면 **같은 도구를 곧바로 다시 물립니다.**
          *
@@ -360,6 +403,26 @@ export function Kline({
         true,
       );
       return true;
+    },
+    setIndicators(list) {
+      const chart = chartRef.current;
+      if (!chart) return;
+      const want = new Map(list.map((i) => [i.name, i.onCandle]));
+      // 원하지 않는 것은 걷어냅니다
+      for (const ind of chart.getIndicators()) {
+        if (!want.has(ind.name)) chart.removeIndicator({ id: ind.id });
+      }
+      // 없는 것만 붙입니다 — 이미 있는 것을 또 붙이면 판이 하나 더 생깁니다
+      for (const [name, onCandle] of want) {
+        if (chart.getIndicators({ name }).length > 0) continue;
+        chart.createIndicator(
+          onCandle ? { name, paneId: "candle_pane" } : name,
+          true,
+        );
+      }
+    },
+    stopDraw() {
+      cancelPending();
     },
     setFutureSpace(px) {
       /*
@@ -442,21 +505,7 @@ export function Kline({
           name: s.name,
           points: s.points,
           styles: penStyles({ color: s.color, size: s.size }),
-          onSelected: (e) => {
-            selectRef.current?.({
-              id: String(e.overlay.id),
-              name: e.overlay.name,
-            });
-            return false;
-          },
-          onDeselected: () => {
-            selectRef.current?.(null);
-            return false;
-          },
-          onRemoved: () => {
-            selectRef.current?.(null);
-            return false;
-          },
+          ...overlayHooks(),
         });
         if (typeof id === "string") {
           drawnRef.current.push(id);

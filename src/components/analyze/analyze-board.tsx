@@ -9,7 +9,9 @@ import {
   type Pen,
   type SavedDrawing,
 } from "@/components/practice/kline";
+import { HandIcon } from "@/components/practice/hand-icon";
 import { recentSheets, useAnalysis } from "@/lib/store/analysis-store";
+import { useChartPrefs } from "@/lib/store/chart-prefs-store";
 import { useNotes } from "@/lib/store/notes-store";
 import {
   SENSITIVITY,
@@ -169,6 +171,15 @@ export function AnalyzeBoard({
   const [picked, setPicked] = useState<{ id: string; name: string } | null>(null);
   const [penColor, setPenColor] = useState(PENS[0].color);
   const [penSize, setPenSize] = useState(2);
+  /*
+   * 보조지표는 저장해 둔 것에서 시작합니다.
+   *
+   * 예전에는 빈 채로 시작해서, 새로고침하거나 종목·봉 단위를 바꿀 때마다
+   * 켜 뒀던 것이 싹 사라졌습니다. 이동평균을 매번 다시 켜야 했습니다.
+   */
+  const savedInd = useChartPrefs((s) => s.indicators.analyze);
+  const prefsHydrated = useChartPrefs((s) => s.hydrated);
+  const rememberInd = useChartPrefs((s) => s.setIndicators);
   const [activeInd, setActiveInd] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -304,6 +315,23 @@ export function AnalyzeBoard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chartReady, feed, tfNow, ticker, tfKey, refreshDrawings, review]);
 
+  /*
+   * 켜 뒀던 보조지표를 도로 올립니다.
+   *
+   * 봉을 갈아끼우면 지표 판도 함께 사라지므로 데이터가 바뀔 때마다 다시
+   * 맞춥니다. `setIndicators` 는 몇 번을 불러도 결과가 같습니다.
+   * 저장된 값을 아직 못 읽었을 때(`hydrated` 전) 부르면 빈 목록으로
+   * 맞춰 버리므로 기다립니다.
+   */
+  useEffect(() => {
+    if (!chartReady || !prefsHydrated || feed.length === 0) return;
+    const want = INDICATORS.filter((i) => savedInd.includes(i.key));
+    chart.current?.setIndicators(
+      want.map((i) => ({ name: i.key, onCandle: i.onCandle })),
+    );
+    setActiveInd(new Set(want.map((i) => i.key)));
+  }, [chartReady, prefsHydrated, savedInd, feed]);
+
   /* ── 그린 것 저장 ────────────────────────────────────────────── */
   const save = useCallback(() => {
     // 회고 모드에서는 절대 저장하지 않습니다 — 지금 그림을 덮어쓰게 됩니다
@@ -325,19 +353,34 @@ export function AnalyzeBoard({
     save();
   }, [refreshDrawings, save]);
 
+  /*
+   * ── 이동·선택 모드 ─────────────────────────────────────────────
+   *
+   * **도구가 물려 있는 동안에는 화면 아무 곳을 눌러도 "새로 그리기" 로
+   * 먹힙니다.** 그래서 이미 그어 둔 선을 누르면 골라지는 게 아니라 그 자리에
+   * 새 선이 하나 더 생겼습니다. 점을 끌어 옮기는 것도 당연히 안 됐고요.
+   *
+   * 하나 그릴 때마다 같은 도구를 다시 물리게 해 둔 것이 원인입니다. 그건
+   * 여러 개를 잇달아 그을 때는 편하지만, 다 그리고 나서 **고치려 들 때는
+   * 빠져나올 길이 없었습니다.** 그래서 여기로 돌아오는 단추를 둡니다.
+   */
+  const stopDraw = useCallback(() => {
+    toolRef.current = null;
+    setTool(null);
+    chart.current?.stopDraw();
+  }, []);
+
   const armTool = useCallback(
     (key: string) => {
       if (toolRef.current === key) {
-        toolRef.current = null;
-        setTool(null);
-        chart.current?.cancelDraw();
+        stopDraw();
         return;
       }
       toolRef.current = key;
       setTool(key);
       chart.current?.startDraw(key, penRef.current);
     },
-    [],
+    [stopDraw],
   );
 
   const handleDrawEnd = useCallback(() => {
@@ -458,14 +501,12 @@ export function AnalyzeBoard({
         e.preventDefault();
         removePicked();
       } else if (e.key === "Escape") {
-        toolRef.current = null;
-        setTool(null);
-        chart.current?.cancelDraw();
+        stopDraw();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undo, picked, removePicked]);
+  }, [undo, picked, removePicked, stopDraw]);
 
   const applyPen = useCallback(
     (color: string, size: number) => {
@@ -529,6 +570,20 @@ export function AnalyzeBoard({
         </div>
 
         <div className="prac__actions">
+          {/*
+            도구를 놓고 화면을 움직이거나 그어 둔 선을 고칠 때 누릅니다.
+            도구 서랍 안에 두면 고칠 때마다 서랍을 열어야 하므로 밖에 둡니다.
+          */}
+          <button
+            type="button"
+            className="btn btn--ghost prac__modebtn"
+            aria-pressed={tool === null}
+            title="도구를 놓습니다. 화면을 끌어 옮기고, 그어 둔 선을 눌러 고칠 수 있습니다 (Esc)"
+            onClick={stopDraw}
+          >
+            <HandIcon />
+            이동
+          </button>
           <button
             type="button"
             className="btn btn--ghost prac__panelbtn"
@@ -674,10 +729,33 @@ export function AnalyzeBoard({
               </button>
             ) : (
               <p className="prac__penhint">
-                그려 둔 선을 <strong>누르면</strong> 색·굵기를 바꾸거나 지울 수
-                있습니다.
+                {tool
+                  ? "지금은 그리는 중입니다. 그어 둔 선을 고치려면 «이동» 을 누르세요."
+                  : "그려 둔 선을 누르면 골라집니다. 점을 끌면 자리를 옮길 수 있습니다."}
               </p>
             )}
+          </section>
+
+          {/*
+            도구 목록 맨 앞에도 둡니다. 서랍을 열어 둔 채로 그리다가 고치고
+            싶어질 때, 지금 무엇이 물려 있는지가 여기서 한눈에 보입니다.
+          */}
+          <section>
+            <h2>다루기</h2>
+            <div className="prac__grid">
+              <button
+                type="button"
+                className="prac__tool"
+                aria-pressed={tool === null}
+                title="도구를 놓습니다 (Esc)"
+                onClick={() => {
+                  stopDraw();
+                  setPanelOpen(false);
+                }}
+              >
+                <HandIcon /> 이동·선택
+              </button>
+            </div>
           </section>
 
           {DRAW_GROUPS.map((g) => (
@@ -797,6 +875,8 @@ export function AnalyzeBoard({
                       const next = new Set(s);
                       if (on) next.add(ind.key);
                       else next.delete(ind.key);
+                      // 다음에 들어와도 그대로 켜져 있게 적어 둡니다
+                      rememberInd("analyze", [...next]);
                       return next;
                     });
                   }}
@@ -805,6 +885,7 @@ export function AnalyzeBoard({
                 </button>
               ))}
             </div>
+            <p className="prac__penhint">켜 둔 것은 다음에 들어와도 그대로입니다.</p>
           </section>
 
           {saved.length > 0 && (
@@ -866,6 +947,8 @@ export function AnalyzeBoard({
             onReady={() => setChartReady(true)}
             onSelect={setPicked}
             onDrawEnd={handleDrawEnd}
+            /* 끌어 옮긴 자리도 남겨야 합니다 — 없으면 다시 들어왔을 때 되돌아갑니다 */
+            onMoveEnd={autoSave}
           />
         </main>
       </div>
