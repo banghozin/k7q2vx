@@ -91,6 +91,78 @@ export type SavedDrawing = {
   size: number;
 };
 
+/**
+ * 빠르게 두 번 누르면 두 번째가 통째로 무시되는 것을 고칩니다.
+ *
+ * klinecharts 안을 열어 보면 이렇습니다(`EventHandlerImp`).
+ *
+ *     ++this._clickCount;
+ *     if (this._clickTimeoutId !== null && this._clickCount > 1) {
+ *         // 5px 안이면 더블클릭으로 보냅니다
+ *         ...
+ *         this._resetClickTimeout();
+ *     } else {
+ *         this._processEvent(compatEvent, this._handler.mouseClickEvent);
+ *     }
+ *
+ * **두 번째 클릭은 `else` 로 안 가므로 클릭이 아예 전달되지 않습니다.**
+ * 거리와 무관합니다 — 5px 는 "더블클릭으로 볼지" 를 가를 뿐이고, 멀리 떨어진
+ * 곳을 눌러도 삼켜집니다. 창은 `Delay.ResetClick = 500ms` 로 꽤 깁니다.
+ * 추세선 두 점을 보통 속도로 찍으면 그냥 걸립니다.
+ *
+ * 그래서 클릭을 처리한 뒤 곧바로 세던 것을 되돌립니다. 그러면 **모든 클릭이
+ * 늘 "첫 클릭"** 이 되어 하나도 안 삼켜집니다.
+ *
+ * 잃는 것: 더블클릭 묶기. 이 라이브러리에서 더블클릭이 쓰이는 곳은 **그리다
+ * 만 도형을 강제로 끝내는 것** 하나뿐인데(`overlay.forceComplete()`), 우리
+ * 도구는 전부 찍을 점 수가 정해져 있어 마지막 점에서 저절로 끝납니다.
+ * 오히려 그 강제 종료가 "가까이 두 번 누르면 그리기가 튕긴다" 의 원인이었습니다.
+ *
+ * 클래스가 밖으로 나와 있지 않아 **차트 안을 훑어 그 물건을 찾습니다.** 못
+ * 찾으면 조용히 넘어갑니다 — 예전처럼 동작할 뿐 깨지지는 않습니다.
+ */
+type ClickState = {
+  _clickCount: number;
+  _clickTimeoutId: unknown;
+  _resetClickTimeout?: () => void;
+};
+
+function relaxClickCoalescing(root: object): boolean {
+  const seen = new Set<object>();
+  const queue: object[] = [root];
+
+  for (let step = 0; step < 6000 && queue.length > 0; step++) {
+    const cur = queue.shift()!;
+    if (seen.has(cur)) continue;
+    seen.add(cur);
+
+    if ("_clickCount" in cur && "_clickTimeoutId" in cur) {
+      const proto = Object.getPrototypeOf(cur) as {
+        _mouseUpHandler?: (e: unknown) => void;
+        __relaxed?: boolean;
+      } | null;
+      const orig = proto?._mouseUpHandler;
+      if (!proto || typeof orig !== "function") return false;
+      if (proto.__relaxed) return true;
+      proto._mouseUpHandler = function (this: ClickState, e: unknown) {
+        orig.call(this, e);
+        // 다음 클릭이 늘 첫 클릭이 되게
+        this._resetClickTimeout?.();
+      };
+      proto.__relaxed = true;
+      return true;
+    }
+
+    for (const v of Object.values(cur)) {
+      if (!v || typeof v !== "object") continue;
+      // DOM 과 캔버스는 들어가 봐야 소득 없이 크기만 합니다
+      if (v instanceof Node || ArrayBuffer.isView(v)) continue;
+      queue.push(v as object);
+    }
+  }
+  return false;
+}
+
 /** 펜 하나를 klinecharts 가 아는 모양으로 바꿉니다 */
 function penStyles(pen: Pen) {
   return {
@@ -264,6 +336,14 @@ export function Kline({
 
       if (!chart) return;
       chartRef.current = chart;
+
+      // 빠르게 두 번 누르면 두 번째가 무시되던 것 — 위 설명 참고
+      if (!relaxClickCoalescing(chart as unknown as object)) {
+        console.warn(
+          "[차트] 클릭 묶기를 풀 자리를 못 찾았습니다. 빠르게 두 번 누르면 " +
+            "두 번째가 무시될 수 있습니다 (klinecharts 안쪽이 바뀐 듯합니다).",
+        );
+      }
 
       /*
        * 일봉만 다루므로 시각은 군더더기입니다. 기본값은 축과 십자선에
