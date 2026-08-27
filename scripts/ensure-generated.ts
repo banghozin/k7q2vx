@@ -24,6 +24,8 @@ const EMPTY: Record<string, unknown> = {
   "briefing.json": { generatedAt: "", asOf: "", source: "", themes: {} },
   "rotation.json": { generatedAt: "", asOf: "", source: "", themes: {} },
   "briefing-history.json": { generatedAt: "", asOf: "", keepDays: 90, days: [] },
+  // 영문 기사 판정용 회사명. 비어 있으면 영문 기사에 종목이 안 걸릴 뿐입니다.
+  "names.json": { generatedAt: "", source: "", count: 0, names: {} },
 };
 
 mkdirSync(DIR, { recursive: true });

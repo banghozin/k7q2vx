@@ -47,9 +47,18 @@ type Archived = {
   th: string[];
   /** 걸린 티커 */
   tk: string[];
+  /**
+   * 출처 id. `sbh` 또는 영문 피드 id(`cnbc-mkt` 등).
+   *
+   * 이 값이 없는 기사는 영문 피드를 붙이기(2026-08-27) 전에 쌓인 것이라
+   * 전부 SBHNews 입니다. 읽는 쪽에서 없으면 `sbh` 로 봅니다.
+   */
+  s?: string;
 };
 
 import { namesIn, tickersIn } from "../src/lib/news-match";
+import { enMatch } from "../src/lib/en-match";
+import { fetchUsNews, US_FEED_LABEL, type UsNewsItem } from "../src/lib/usnews";
 
 /** 티커가 걸리면 그 종목이 속한 테마도 걸린 것으로 봅니다 */
 function themesOfTickers(tk: string[]): string[] {
@@ -121,24 +130,63 @@ function classify(it: NewsItem): Archived | null {
     c: it.category,
     th,
     tk,
+    s: "sbh",
+  };
+}
+
+/**
+ * 영문 기사를 보관 형태로 바꿉니다.
+ *
+ * 한국어 쪽과 달리 **거를 것이 없습니다.** 이 피드들은 처음부터 미국 시장
+ * 매체라 "국내 기사인가"를 물을 필요가 없습니다. 종목이 안 걸린 기사도
+ * 시장 기사로 그대로 담습니다 — 홈 헤드라인이 여기서 나옵니다.
+ *
+ * 종목 판정은 `en-match.ts` 가 맡습니다. 영어는 회사 이름이 일상어와 자주
+ * 겹쳐서(Powell Industries ↔ 연준 의장) 한국어와 규칙이 다릅니다.
+ */
+function classifyUs(it: UsNewsItem): Archived {
+  const tk = enMatch(`${it.title} ${it.description}`).sort();
+  return {
+    t: it.title,
+    u: it.link,
+    d: it.pubDate,
+    c: "economy",
+    th: themesOfTickers(tk).sort(),
+    tk,
+    s: it.source,
   };
 }
 
 type MonthFile = { month: string; updatedAt: string; items: Archived[] };
 
 async function main() {
-  const items = await fetchNews();
-  if (items.length === 0) {
-    console.error("[news] 피드를 읽지 못했습니다. 기존 아카이브를 그대로 둡니다.");
+  // 한국어 피드와 영문 피드를 함께 받습니다. 한쪽이 죽어도 다른 쪽은 들어옵니다.
+  const [koItems, usItems] = await Promise.all([fetchNews(), fetchUsNews()]);
+
+  if (koItems.length === 0 && usItems.length === 0) {
+    console.error("[news] 어느 피드도 읽지 못했습니다. 기존 아카이브를 그대로 둡니다.");
     process.exit(0); // 실패해도 갱신 전체를 멈추지 않습니다
   }
 
-  const picked = items
+  const koPicked = koItems
     .map(classify)
     .filter((x): x is Archived => x !== null);
+  const usPicked = usItems.map(classifyUs);
+
+  const picked = [...koPicked, ...usPicked];
+
+  const bySource = new Map<string, number>();
+  for (const a of usPicked) {
+    bySource.set(a.s ?? "?", (bySource.get(a.s ?? "?") ?? 0) + 1);
+  }
 
   console.log(
-    `[news] 받은 기사 ${items.length}건 중 우리 테마·종목에 걸린 것 ${picked.length}건`,
+    `[news] 한국어 ${koItems.length}건 중 ${koPicked.length}건 보관 · ` +
+      `영문 ${usItems.length}건 전부 보관 ` +
+      `(${[...bySource].map(([s, n]) => `${US_FEED_LABEL[s] ?? s} ${n}`).join(", ")})`,
+  );
+  console.log(
+    `[news] 그중 종목이 걸린 것 ${picked.filter((a) => a.tk.length > 0).length}건`,
   );
 
   // 달별로 나눠 담습니다. 한 파일에 다 넣으면 시간이 갈수록 감당이 안 됩니다.
@@ -189,18 +237,39 @@ async function main() {
    * 그걸 잊으면 새 달 기사가 조용히 안 보이게 됩니다. 경로가 고정된 파일
    * 하나로 합쳐 두면 그런 일이 없습니다.
    */
-  const cutoff = Date.now() - RECENT_DAYS * 86400000;
+  /*
+   * 두 종류를 다른 기간으로 담습니다.
+   *
+   * 영문 피드를 붙이면서 하루 들어오는 기사가 열 배 넘게 늘었습니다. 예전처럼
+   * 전부 90일치를 한 파일에 넣으면 수 MB가 됩니다. 쓰임새가 다르므로 나눕니다.
+   *
+   *   종목이 걸린 기사 — 90일. 종목 화면·매매노트·차트 표시가 과거를 되짚습니다
+   *   시장 기사       — 10일. 홈 헤드라인과 보관함 앞부분에만 쓰입니다
+   *
+   * 장기 보관은 달별 파일이 계속 맡습니다. 여기서 빠져도 사라지지 않습니다.
+   */
+  const now = Date.now();
+  const tickerCutoff = now - RECENT_DAYS * 86400000;
+  const marketCutoff = now - MARKET_DAYS * 86400000;
+
   const recent: Archived[] = [];
   for (const [, items] of byMonthAll(await readAllMonths())) {
     for (const a of items) {
-      if (new Date(a.d).getTime() >= cutoff) recent.push(a);
+      const t = new Date(a.d).getTime();
+      const keep = a.tk.length > 0 ? t >= tickerCutoff : t >= marketCutoff;
+      if (keep) recent.push(a);
     }
   }
   recent.sort((a, b) => (a.d < b.d ? 1 : -1));
 
+  // 마지막 안전장치. 예상보다 많이 들어와도 파일이 무한정 커지지 않게.
+  if (recent.length > MAX_RECENT) recent.length = MAX_RECENT;
+
   const recentFile = {
     updatedAt: new Date().toISOString(),
     days: RECENT_DAYS,
+    marketDays: MARKET_DAYS,
+    /** 출처는 기사마다 `s` 로 들어 있습니다. 여기 값은 한국어 피드 표기용입니다. */
     source: "SBHNews / 센서스튜디오",
     license: "CC BY 4.0",
     licenseUrl: "https://creativecommons.org/licenses/by/4.0/",
@@ -219,8 +288,12 @@ async function main() {
   );
 }
 
-/** 화면이 들고 갈 기간 */
+/** 종목이 걸린 기사를 들고 갈 기간 */
 const RECENT_DAYS = 90;
+/** 종목이 안 걸린 시장 기사를 들고 갈 기간 */
+const MARKET_DAYS = 10;
+/** recent.json 에 담을 최대 건수 */
+const MAX_RECENT = 3000;
 
 async function readAllMonths(): Promise<MonthFile[]> {
   const { readdir } = await import("node:fs/promises");

@@ -13,6 +13,8 @@
  */
 
 import type { NewsItem } from "./sbhnews";
+import { SBH } from "./sbhnews";
+import { US_FEED_LABEL } from "./usnews";
 
 /** 보관된 기사. 파일 크기를 줄이려고 키를 짧게 뒀습니다. */
 export type ArchivedRaw = {
@@ -22,6 +24,8 @@ export type ArchivedRaw = {
   c: string;
   th: string[];
   tk: string[];
+  /** 출처 id. 없으면 영문 피드를 붙이기 전에 쌓인 것이라 SBHNews 입니다. */
+  s?: string;
 };
 
 export type Archived = {
@@ -34,7 +38,27 @@ export type Archived = {
   category: string;
   themes: string[];
   tickers: string[];
+  /** 출처 id */
+  source: string;
+  /** 화면에 뜨는 출처 이름 */
+  sourceLabel: string;
+  /** 영문 기사인가 — 제목을 원문 그대로 보여주므로 화면에서 표시합니다 */
+  english: boolean;
 };
+
+/** 출처 id → 화면 이름 */
+export function sourceLabel(id: string): string {
+  if (id === "sbh") return "SBHNews";
+  return US_FEED_LABEL[id] ?? id;
+}
+
+/** 한국어 매체는 SBHNews 하나뿐입니다 */
+export function isEnglishSource(id: string): boolean {
+  return id !== "sbh";
+}
+
+/** CC BY 4.0 표기가 필요한 것은 SBHNews 뿐입니다 */
+export { SBH };
 
 /*
  * 갱신 스크립트가 달별 파일을 장기 보관용으로 쌓고, 화면이 쓸 최근분만
@@ -48,6 +72,7 @@ type RecentFile = { updatedAt: string; days: number; items: ArchivedRaw[] };
 const recentFile = recentJson as unknown as RecentFile;
 
 function expand(r: ArchivedRaw): Archived {
+  const s = r.s ?? "sbh";
   return {
     title: r.t,
     link: r.u,
@@ -56,6 +81,9 @@ function expand(r: ArchivedRaw): Archived {
     category: r.c,
     themes: r.th ?? [],
     tickers: r.tk ?? [],
+    source: s,
+    sourceLabel: sourceLabel(s),
+    english: isEnglishSource(s),
   };
 }
 

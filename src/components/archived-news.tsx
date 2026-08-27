@@ -34,6 +34,9 @@ export function ArchivedNews({
     return <p className="arcnews__empty">{emptyText}</p>;
   }
 
+  // CC BY 4.0 표기는 SBHNews 기사가 실제로 있을 때만 답니다
+  const hasSbh = items.some((a) => a.source === "sbh");
+
   return (
     <>
       <ul className="arcnews">
@@ -42,16 +45,24 @@ export function ArchivedNews({
             <a href={a.link} target="_blank" rel="noreferrer">
               <span className="arcnews__day mono">{day(a.date)}</span>
               <span className="arcnews__title">{a.title}</span>
+              <span className="arcnews__from">{a.sourceLabel}</span>
             </a>
           </li>
         ))}
       </ul>
       {showSource && (
         <p className="arcnews__src">
-          출처 {SBH.source} ·{" "}
-          <a href={SBH.licenseUrl} target="_blank" rel="noreferrer">
-            {SBH.license}
-          </a>{" "}
+          {hasSbh
+            ? `출처 ${SBH.source} 외 미국 금융 매체`
+            : "출처는 각 기사 옆에 적었습니다"}
+          {hasSbh && (
+            <>
+              {" ·"}{" "}
+              <a href={SBH.licenseUrl} target="_blank" rel="noreferrer">
+                {SBH.license}
+              </a>
+            </>
+          )}{" "}
           · 제목과 원문 링크만 보관했고 본문은 고치지 않았습니다
         </p>
       )}

@@ -545,6 +545,13 @@ button {
   border-color: var(--brass-dim);
 }
 
+/* 출처 표시. 누를 수 없으므로 테두리를 지우고 뒤로 물립니다 */
+.tag--from {
+  border-color: transparent;
+  padding-left: 0;
+  color: var(--ink-4);
+}
+
 /* 별표 */
 .star {
   position: absolute;
@@ -1090,6 +1097,14 @@ tbody tr:hover {
   overflow: hidden;
 }
 
+/* 기사에 이름이 나온 우리 종목 */
+.newsitem__tickers {
+  margin-top: 0.35rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--brass-dim);
+}
+
 /* ── 보관된 기사 목록 ─────────────────────────────────────────────── */
 
 .arcnews {
@@ -1131,6 +1146,16 @@ tbody tr:hover {
 
 .arcnews__title {
   transition: color 0.15s;
+}
+
+/* 어느 매체 기사인가 — 한국어와 영문이 섞여 들어오므로 항목마다 밝힙니다 */
+.arcnews__from {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 0.5rem;
+  font-size: 0.66rem;
+  color: var(--ink-4);
+  white-space: nowrap;
 }
 
 .arcnews__src {

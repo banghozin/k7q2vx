@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { THEMES, allTickers, getTheme, multiThemeStocks, nameOf } from "@/data/themes";
 import { CrossTicker } from "@/components/cross-ticker";
-import { NewsList } from "@/components/news-list";
+import { NewsList, type FeedItem } from "@/components/news-list";
 import { fetchNews, usHeadlines } from "@/lib/sbhnews";
+import { fetchUsNews, US_FEED_LABEL } from "@/lib/usnews";
+import { enMatch } from "@/lib/en-match";
+import { namesIn, tickersIn } from "@/lib/news-match";
 import { BriefHistory } from "@/components/brief-history";
 import { ThemeBriefingLine } from "@/components/briefing";
 import {
@@ -30,17 +33,54 @@ export default async function Home() {
   const moves = handovers();
   const rotated = rotations().slice(0, 4);
 
-  // 홈은 "지금"을 보여주는 자리라 보관본이 아니라 실시간 피드를 씁니다
   /*
-   * 공개 피드는 한국 매체라 `economy` 를 그대로 쓰면 국내 증권사 조직 개편,
-   * 중기부 상담회 같은 기사가 올라옵니다. 미국 개별종목을 매매하는 사람에게는
-   * 쓸모가 없어서, **미국 시장 얘기이거나 우리가 다루는 회사 얘기인 것만**
-   * 남깁니다. 오늘 그런 기사가 없으면 이 구획은 아예 나오지 않습니다.
+   * 홈은 "지금"을 보여주는 자리라 보관본이 아니라 실시간 피드를 씁니다.
+   *
+   * 미국 금융 매체(CNBC·MarketWatch 등)를 먼저 씁니다. 처음부터 미국 시장
+   * 매체라 거를 것이 없고, 한국 매체 피드는 미국장이 열리기 전 시간대에
+   * 미국 기사가 **0건**일 때가 흔했습니다.
+   *
+   * 한국어 기사도 함께 올립니다 — 같은 사안을 한국어로 읽을 수 있으면 그쪽이
+   * 편하기 때문입니다. 다만 국내 기업 소식이 섞이지 않도록 예전 조건
+   * ("미국 시장 얘기이거나 우리가 다루는 회사 얘기")을 그대로 겁니다.
    */
   const covered = allTickers()
     .map((t) => nameOf(t))
     .filter((n): n is string => Boolean(n));
-  const headlines = usHeadlines(await fetchNews(), covered, 5);
+
+  const [us, ko] = await Promise.all([fetchUsNews(), fetchNews()]);
+
+  /*
+   * 최신순으로만 뽑으면 갱신이 가장 빠른 피드가 자리를 다 차지합니다. 실제로
+   * 확인했더니 "어느 회사 EPS가 0.05달러 밑돌았다" 같은 단신이 홈 맨 위에
+   * 올라왔습니다. 이 사이트에서 값이 있는 기사는 **우리가 다루는 회사가
+   * 나오는 기사**이므로 그쪽을 먼저 올립니다. 같은 조건이면 최신순입니다.
+   */
+  const pool: FeedItem[] = [
+    ...usHeadlines(ko, covered, 3).map((n) => ({
+      ...n,
+      sourceLabel: "SBHNews",
+      tickers: [...new Set([...tickersIn(n.title), ...namesIn(n.title)])],
+    })),
+    ...us.map((n) => ({
+      title: n.title,
+      link: n.link,
+      description: n.description,
+      pubDate: n.pubDate,
+      category: "economy",
+      sourceLabel: US_FEED_LABEL[n.source] ?? n.source,
+      tickers: enMatch(`${n.title} ${n.description}`),
+    })),
+  ];
+
+  const headlines = pool
+    .sort((a, b) => {
+      const byTicker =
+        Number((b.tickers?.length ?? 0) > 0) - Number((a.tickers?.length ?? 0) > 0);
+      if (byTicker !== 0) return byTicker;
+      return a.pubDate < b.pubDate ? 1 : -1;
+    })
+    .slice(0, 6);
 
   return (
     <>
@@ -74,9 +114,11 @@ export default async function Home() {
           <section className="section">
             <h2 className="section__title">미국 시장 관련 헤드라인</h2>
             <p className="section__sub">
-              공개 뉴스 피드의 경제 기사 중 <strong>미국 시장이나 여기서 다루는
-              종목</strong>이 언급된 것만 골랐습니다. 국내 기업 소식은 빼고 있습니다.
-              위 테마·종목 배치와 인과관계를 주장하지 않습니다.
+              미국 금융 매체의 공개 피드에서 가져옵니다. 영문 제목은{" "}
+              <strong>번역하지 않고 원문 그대로</strong> 둡니다 — 옮기는 과정에서
+              뜻이 바뀌는 편보다 낫다고 봤습니다. 한국어 기사는 미국 시장이나
+              여기서 다루는 종목이 나온 것만 올립니다. 위 테마·종목 배치와
+              인과관계를 주장하지 않습니다.
             </p>
             <NewsList items={headlines} />
           </section>

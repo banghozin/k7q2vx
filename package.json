@@ -13,7 +13,9 @@
     "fetch": "tsx scripts/fetch-prices.ts",
     "compute": "tsx scripts/compute.ts",
     "news": "tsx scripts/fetch-news.ts",
+    "names": "tsx scripts/fetch-names.ts",
     "test:news": "tsx scripts/test-news-match.ts",
+    "test:en": "tsx scripts/test-en-match.ts",
     "update": "npm run fetch && npm run compute && npm run news",
     "clean-news": "tsx scripts/clean-news.ts"
   },
