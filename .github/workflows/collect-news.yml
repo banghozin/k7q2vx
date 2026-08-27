@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: write
+  issues: write # 실패했을 때 이슈로 알리기 위해
 
 concurrency:
   # 시세 갱신과 같은 파일(생성 JSON)을 건드리므로 줄을 세웁니다
@@ -62,3 +63,38 @@ jobs:
           done
           echo "푸시에 실패했습니다"
           exit 1
+
+      # 받아 온 것을 다 쌓은 **뒤에** 판정합니다.
+      #
+      # 피드는 예외 없이 죽습니다 — 주소가 바뀌거나 형식이 Atom 으로 바뀌면
+      # 그냥 0건이 됩니다. 여기서 걸지 않으면 몇 달 뒤에야 "요즘 기사가
+      # 적네" 하고 알게 됩니다.
+      - name: 피드가 살아 있는지
+        run: |
+          if [ ! -f .feed-health ]; then echo "판정 파일이 없습니다"; exit 1; fi
+          cat .feed-health
+          if [ "$(jq -r .broken .feed-health)" = "true" ]; then
+            echo "::error::절반 넘는 피드가 한 건도 주지 않았습니다"
+            exit 1
+          fi
+
+      # 이쪽이야말로 알림이 필요합니다.
+      #
+      # 시세 갱신은 하루 한 번이고 실패하면 화면의 숫자가 어제 것으로 남아
+      # 눈에 띕니다. 뉴스 수집은 **하루 네 번, 남의 서버 일곱 곳**에 기대는데
+      # 실패해도 화면이 멀쩡해 보입니다. 기사가 조금씩 덜 쌓일 뿐입니다.
+      # 그런데 공개 피드는 몇 시간치만 주므로 **그동안 지나간 기사는 영영
+      # 되찾을 수 없습니다.** 조용히 실패하면 안 되는 쪽입니다.
+      - name: 실패 알림
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="뉴스 수집 실패"
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          open=$(gh issue list --search "$title in:title state:open" --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body "$(date -u +'%Y-%m-%d %H:%M UTC') 에 또 실패했습니다 — $run_url"
+          else
+            gh issue create --title "$title" --body "$(printf '자동 뉴스 수집이 실패했습니다. 지나간 기사는 되찾을 수 없으므로 빨리 보는 편이 좋습니다.\n\n로그: %s\n\n흔한 원인:\n- 피드 주소가 바뀌거나 형식이 Atom 으로 바뀜 (조용히 0건이 됩니다)\n- 매체가 요청을 막음\n- 무결성 검사에서 걸림 (이상한 링크·날짜)\n' "$run_url")"
+          fi

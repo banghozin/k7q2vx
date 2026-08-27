@@ -58,7 +58,12 @@ type Archived = {
 
 import { namesIn, tickersIn } from "../src/lib/news-match";
 import { enMatch } from "../src/lib/en-match";
-import { fetchUsNews, US_FEED_LABEL, type UsNewsItem } from "../src/lib/usnews";
+import {
+  fetchUsNews,
+  US_FEEDS,
+  US_FEED_LABEL,
+  type UsNewsItem,
+} from "../src/lib/usnews";
 
 /** 티커가 걸리면 그 종목이 속한 테마도 걸린 것으로 봅니다 */
 function themesOfTickers(tk: string[]): string[] {
@@ -177,7 +182,30 @@ async function main() {
   }
   if (koItems.length === 0) {
     console.warn("[news] ⚠ 한국어 피드(SBHNews)에서 한 건도 못 받았습니다.");
+    dead.push("SBHNews");
   }
+
+  /*
+   * 죽은 피드를 파일에 적어 둡니다 — 자동 실행이 알아채게 하려고.
+   *
+   * 경고만 찍으면 아무도 안 봅니다. 이 코드 스스로 "몇 달 뒤에야 알게
+   * 됩니다" 라고 적어 뒀는데 정말 그렇습니다. 그렇다고 여기서 그냥 멈추면
+   * **이번에 받아 온 기사까지 커밋되지 못하고 날아갑니다.** 공개 피드는
+   * 몇 시간치만 주므로 그건 되찾을 수 없는 손해입니다.
+   *
+   * 그래서 쌓는 일은 끝까지 마치고, 판정만 남겨 둡니다. 자동 실행이 커밋을
+   * 끝낸 뒤에 이 파일을 보고 알립니다.
+   *
+   * 하나 죽은 것은 그날 그 매체가 잠깐 흔들린 것일 수 있어 넘어갑니다.
+   * **절반 넘게 죽었으면** 흔들림이 아니라 고장입니다.
+   */
+  const feedCount = US_FEEDS.length + 1; // 영문 여섯 곳 + 한국어 한 곳
+  const broken = dead.length > feedCount / 2;
+  await writeFile(
+    ".feed-health",
+    JSON.stringify({ dead, feedCount, broken }) + "\n",
+    "utf8",
+  );
 
   if (koItems.length === 0 && usItems.length === 0) {
     console.error("[news] 어느 피드도 읽지 못했습니다. 기존 아카이브를 그대로 둡니다.");
@@ -268,18 +296,43 @@ async function main() {
   const tickerCutoff = now - RECENT_DAYS * 86400000;
   const marketCutoff = now - MARKET_DAYS * 86400000;
 
-  const recent: Archived[] = [];
+  const tickerNews: Archived[] = [];
+  const marketNews: Archived[] = [];
   for (const [, items] of byMonthAll(await readAllMonths())) {
     for (const a of items) {
       const t = new Date(a.d).getTime();
-      const keep = a.tk.length > 0 ? t >= tickerCutoff : t >= marketCutoff;
-      if (keep) recent.push(a);
+      if (a.tk.length > 0) {
+        if (t >= tickerCutoff) tickerNews.push(a);
+      } else if (t >= marketCutoff) {
+        marketNews.push(a);
+      }
     }
   }
-  recent.sort((a, b) => (a.d < b.d ? 1 : -1));
 
-  // 마지막 안전장치. 예상보다 많이 들어와도 파일이 무한정 커지지 않게.
-  if (recent.length > MAX_RECENT) recent.length = MAX_RECENT;
+  /*
+   * 상한을 **종류별로 따로** 겁니다.
+   *
+   * 처음에는 합쳐 놓고 최신순으로 잘랐습니다. 그런데 시장 기사가 종목 기사보다
+   * 대여섯 배 많이 들어오고(재어 보니 하루 99건 대 32건), 시장 기사는 열흘치라
+   * 전부 최신입니다. 그러니 합쳐서 자르면 **잘려 나가는 것이 죄다 90일치 종목
+   * 기사** 입니다 — 이 보관함이 존재하는 이유가 그 90일치인데 말입니다.
+   * 홈 헤드라인용으로 며칠 쓰고 마는 시장 기사가 자리를 밀어냈습니다.
+   *
+   * 실제로 하루 130건 들어오면 종목 기사만 90일에 2,900건이 되어 합산 상한
+   * 3,000건을 곧 넘깁니다. 며칠 안에 닿을 값이었습니다.
+   */
+  const cut = (list: Archived[], max: number) => {
+    list.sort((a, b) => (a.d < b.d ? 1 : -1)); // 최신이 위로
+    if (list.length <= max) return list;
+    console.warn(
+      `[news] ⚠ 상한에 걸려 ${list.length - max}건을 화면용에서 뺐습니다 ` +
+        `(달별 파일에는 남아 있습니다)`,
+    );
+    return list.slice(0, max);
+  };
+
+  const recent = [...cut(tickerNews, MAX_TICKER), ...cut(marketNews, MAX_MARKET)];
+  recent.sort((a, b) => (a.d < b.d ? 1 : -1));
 
   const recentFile = {
     updatedAt: new Date().toISOString(),
@@ -308,8 +361,15 @@ async function main() {
 const RECENT_DAYS = 90;
 /** 종목이 안 걸린 시장 기사를 들고 갈 기간 */
 const MARKET_DAYS = 10;
-/** recent.json 에 담을 최대 건수 */
-const MAX_RECENT = 3000;
+/**
+ * 화면용 파일에 담을 최대 건수 — 종류별로 따로 겁니다.
+ *
+ * 종목 기사가 이 보관함의 값진 쪽이라 자리를 넉넉히 갖습니다. 시장 기사는
+ * 홈 헤드라인과 보관함 앞부분에만 쓰이므로 열흘치가 다 들어갈 만큼만 둡니다.
+ * 넘쳐도 달별 파일에는 그대로 남으므로 사라지지는 않습니다.
+ */
+const MAX_TICKER = 3000;
+const MAX_MARKET = 1500;
 
 async function readAllMonths(): Promise<MonthFile[]> {
   const { readdir } = await import("node:fs/promises");

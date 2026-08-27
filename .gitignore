@@ -18,6 +18,9 @@ tsconfig.tsbuildinfo
 *.log
 .DS_Store
 
+# 뉴스 수집이 남기는 피드 생사 판정 — 자동 실행이 그 자리에서만 읽습니다
+.feed-health
+
 # 그림 검토용으로 뽑아낸 미리보기 (저장소에 둘 이유 없음)
 _preview-*.svg
 
