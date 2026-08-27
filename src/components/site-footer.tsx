@@ -24,8 +24,12 @@ export function SiteFooter() {
             <h4>데이터</h4>
             <ul>
               <li>시세 · Yahoo Finance (지연될 수 있음)</li>
+              {/*
+                공급원이 둘입니다. 한국어 매체 하나만 적어 두면 CNBC 기사에도
+                그 출처가 붙은 것처럼 읽힙니다. CC BY 4.0 은 SBHNews 조건입니다.
+              */}
               <li>
-                뉴스 ·{" "}
+                뉴스 · 미국 금융 매체 공개 RSS,{" "}
                 <a href={SBH.dataUseUrl} target="_blank" rel="noreferrer">
                   {SBH.source}
                 </a>{" "}

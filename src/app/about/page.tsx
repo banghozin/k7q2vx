@@ -71,9 +71,9 @@ export default function AboutPage() {
             넣지 않습니다.
           </p>
           <p>
-            앞으로 붙일 동조율(대장주가 크게 오른 날 각 종목이 어떻게 반응했는지
-            세는 숫자)은 <strong>과거 기록이지 예측이 아닙니다.</strong> 이
-            문구를 작게 숨기지 않고 숫자 옆에 그대로 두겠습니다.
+            동조율(대장주가 크게 오른 날 각 종목이 어떻게 반응했는지 세는
+            숫자)은 <strong>과거 기록이지 예측이 아닙니다.</strong> 이 문구를
+            작게 숨기지 않고 숫자 옆에 그대로 둡니다.
           </p>
           <p style={{ marginBottom: 0 }}>
             표시되는 종목은 산업 구조를 설명하기 위한 분류 예시입니다. 특정
@@ -115,6 +115,35 @@ export default function AboutPage() {
           후보 세 개에 더해 그 테마에서 거래대금이 가장 큰 종목(대개 사람들이
           아는 이름)을 후보에 넣어 뒀습니다. &ldquo;엔비디아 기준으로 보면 어떤가&rdquo;
           같은 질문에 바로 답하기 위해서입니다.
+        </p>
+
+        <h3 style={{ fontSize: "1.05rem", margin: "1.5rem 0 0.5rem" }}>
+          층 전체였나, 이 종목만이었나
+        </h3>
+        <p style={{ maxWidth: "var(--measure)", color: "var(--ink-2)" }}>
+          종목이 크게 움직인 날, <strong>같은 층에서 그 종목을 뺀 나머지</strong>의
+          중앙값과 견줍니다. 자기를 빼는 이유는 구성원이 적은 층에서 자기가 자기를
+          설명하게 되기 때문이고, 중앙값을 쓰는 이유는 한 종목이 실적으로 튀어도
+          층 전체가 왜곡되지 않게 하기 위해서입니다.
+        </p>
+        <ul style={{ maxWidth: "var(--measure)", color: "var(--ink-2)" }}>
+          <li>
+            <strong>층 전체가 같이</strong> — 나머지도 이 종목의 60% 이상 같은
+            방향으로 움직였을 때
+          </li>
+          <li>
+            <strong>이 종목만</strong> — 나머지가 반대로 갔거나 30%도 못 미쳤을 때
+          </li>
+          <li>
+            <strong>일부만 같이</strong> — 그 사이
+          </li>
+        </ul>
+        <p style={{ maxWidth: "var(--measure)", color: "var(--ink-2)" }}>
+          하루 2%(닷새 4%)도 안 움직인 날은 <strong>판정하지 않습니다</strong> —
+          잠잠한 날에 방향을 따지는 건 잡음입니다. 비교 상대가 하나뿐인 층도
+          판정하지 않습니다. 그건 중앙값이 아니라 그냥 그 한 종목이니까요.
+          차트를 열면 종목 아래에 나옵니다. <strong>기준일은 마지막 거래일이라
+          지금 시세와 다를 수 있어 날짜를 함께 적습니다.</strong>
         </p>
 
         <h3 style={{ fontSize: "1.05rem", margin: "1.5rem 0 0.5rem" }}>
@@ -186,30 +215,43 @@ export default function AboutPage() {
               <tr>
                 <td data-label="항목">뉴스</td>
                 <td data-label="출처와 방식">
+                  미국 금융 매체(CNBC · MarketWatch · Yahoo Finance · Nasdaq ·
+                  Seeking Alpha)와 한국어{" "}
                   <a href={SBH.dataUseUrl} target="_blank" rel="noreferrer">
                     {SBH.source}
-                  </a>{" "}
-                  공개 RSS. 라이선스{" "}
+                  </a>
+                  의 공개 RSS. 뒤엣것은 라이선스{" "}
                   <a href={SBH.licenseUrl} target="_blank" rel="noreferrer">
                     {SBH.license}
                   </a>
-                  . 본문은 수정하지 않았고 테마 키워드로 골라 배치하는 가공만
-                  했습니다. 기사의 제3자 권리 자료는 이용 범위에서 제외됩니다.
+                  입니다. <strong>제목과 원문 링크만</strong> 가져오며 본문은
+                  받지도 고치지도 않습니다 — 읽기는 각 매체의 원문에서 하시게
+                  됩니다. 기사에 종목을 붙일 때는{" "}
+                  <strong>회사 이름이 실제로 나온 것만</strong> 겁니다. 예전에
+                  테마 키워드로 훑었더니 &ldquo;보안&rdquo;으로 멕시코 치안 기사가,
+                  &ldquo;조선&rdquo;으로 시외버스 요금 기사가 딸려 들어와 그만뒀습니다.
+                  기사의 제3자 권리 자료는 이용 범위에서 제외됩니다.
                 </td>
               </tr>
               <tr>
-                <td data-label="항목">워치리스트 · 매매노트</td>
+                <td data-label="항목">기기에 저장되는 것</td>
                 <td data-label="출처와 방식">
-                  이용자의 브라우저(localStorage)에만 저장됩니다. 서버로
-                  전송되지 않습니다.
+                  워치리스트 · 매매노트 · 훈련 기록 · <strong>분석 화면에 그린
+                  것</strong>. 전부 이용자의 브라우저(localStorage)에만
+                  저장됩니다. 서버로 전송되지 않고 다른 기기와 동기화되지
+                  않으며 운영자도 볼 수 없습니다. 브라우저 데이터를 지우면
+                  사라지므로 매매노트는 내보내기로 백업해 두세요.
                 </td>
               </tr>
               <tr>
                 <td data-label="항목">갱신 주기</td>
                 <td data-label="출처와 방식">
-                  평일 미국장 마감 후 하루 1회. 실시간이 아니라는 점은 의도된
-                  선택입니다. 갱신 전에 모든 종목이 아직 상장돼 있는지 자동으로
-                  확인하며, 하나라도 사라졌으면 갱신을 멈추고 알립니다.
+                  시세와 계산은 평일 미국장 마감 후 <strong>하루 1회</strong>.
+                  실시간이 아니라는 점은 의도된 선택입니다. 갱신 전에 모든
+                  종목이 아직 상장돼 있는지 자동으로 확인하며, 하나라도
+                  사라졌으면 갱신을 멈추고 알립니다. 뉴스는 따로{" "}
+                  <strong>여섯 시간마다</strong> 모읍니다 — 공개 피드가 몇
+                  시간치만 주기 때문에 하루 한 번으로는 그날 기사를 놓칩니다.
                 </td>
               </tr>
             </tbody>
@@ -220,9 +262,11 @@ export default function AboutPage() {
       <section className="section" style={{ borderBottom: "none" }}>
         <h2 className="section__title">아직 없는 것</h2>
         <p style={{ maxWidth: "var(--measure)", color: "var(--ink-2)" }}>
-          매일 한 줄 브리핑(&ldquo;오늘 AI 체인에서 가장 뜨거웠던 층은 광통신&rdquo; 같은
-          자동 요약)은 아직 없습니다. 층 안에서의 순환을 시간축으로 보여주는
-          화면도 없습니다. <Link href="/">테마 목록으로</Link>
+          기업의 실적 발표 일정을 층 위에 얹어 보여주는 화면이 아직 없습니다.
+          기관 보유 변동(13F)을 층 단위로 합산해 보여주는 것도 없습니다. 영문
+          기사의 제목은 <strong>번역하지 않고 원문 그대로</strong> 둡니다 —
+          옮기는 과정에서 뜻이 바뀌는 편보다 낫다고 봤습니다.{" "}
+          <Link href="/">테마 목록으로</Link>
         </p>
       </section>
     </div>

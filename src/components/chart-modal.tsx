@@ -8,6 +8,8 @@ import { nameOf, placementsOf } from "@/data/themes";
 import { CandleChart, type Candle, type TradeMarker } from "./candle-chart";
 import { StarButton } from "./star-button";
 import { MoveVerdictBlock } from "./move-verdict";
+import { ArchivedNews } from "./archived-news";
+import type { Archived } from "@/lib/news-archive";
 
 const RANGES = [
   { key: "3mo", label: "3개월" },
@@ -24,15 +26,10 @@ type Payload = {
 };
 
 type NewsPayload = {
-  items: { title: string; link: string; date: string; day: string }[];
+  /** `/api/news` 는 아카이브 항목을 그대로 넘겨줍니다 (출처 포함) */
+  items: Archived[];
   days: { day: string; time: number; titles: string[] }[];
 };
-
-const newsDate = new Intl.DateTimeFormat("ko-KR", {
-  month: "2-digit",
-  day: "2-digit",
-  timeZone: "UTC",
-});
 
 export function ChartModal() {
   const ticker = useChartModal((s) => s.ticker);
@@ -255,28 +252,13 @@ export function ChartModal() {
               >
                 이 종목이 나온 기사
               </h4>
-              <ul className="arcnews">
-                {news.items.map((n) => (
-                  <li key={n.link}>
-                    <a href={n.link} target="_blank" rel="noreferrer">
-                      <span className="arcnews__day mono">
-                        {newsDate.format(new Date(n.date))}
-                      </span>
-                      <span className="arcnews__title">{n.title}</span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
-              <p className="arcnews__src">
-                출처 SBHNews / 센서스튜디오 ·{" "}
-                <a
-                  href="https://creativecommons.org/licenses/by/4.0/"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  CC BY 4.0
-                </a>
-              </p>
+              {/*
+                예전에는 여기에 목록과 출처를 따로 그리면서 **출처를 SBHNews 로
+                박아 뒀습니다.** 영문 매체 기사가 들어오면서 CNBC 기사에도
+                "출처 SBHNews" 가 붙는 잘못된 표기가 됐습니다. 아카이브 목록을
+                그리는 곳은 한 군데로 모읍니다 — 매체명은 기사마다 붙습니다.
+              */}
+              <ArchivedNews items={news.items} />
             </div>
           )}
 

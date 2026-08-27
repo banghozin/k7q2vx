@@ -106,6 +106,50 @@ async function main() {
     }
   }
 
+  /* ── 2-b. 대장주 순위에 같은 종목이 두 번 오르지 않았는가 ──
+   *
+   * 한 회사가 같은 테마의 두 층에 걸쳐 있을 수 있습니다(우주·방산의 LMT 가
+   * 발사체와 무기 체계 양쪽). 테마 단위 명단을 만들 때 중복을 안 빼면 순위에
+   * 같은 종목이 나란히 뜨고, 1·2위가 같아서 **"접전" 이 항상 켜집니다.**
+   */
+  const leaders = await load<{
+    themes: Record<string, { ranked: { ticker: string }[]; close?: boolean }>;
+  }>("leaders.json");
+  for (const [slug, t] of Object.entries(leaders.themes)) {
+    const r = (t.ranked ?? []).map((x) => x.ticker);
+    const dup = [...new Set(r.filter((x, i) => r.indexOf(x) !== i))];
+    if (dup.length) note(`${slug} 대장주 순위에 중복: ${dup.join(",")}`);
+  }
+
+  /* ── 2-c. 큐레이션 데이터 자체 ─────────────────────────────── */
+  for (const t of THEMES) {
+    const ns = new Set<number>();
+    const keys = new Set<string>();
+    for (const l of t.layers) {
+      if (ns.has(l.n)) note(`${t.slug} 층 번호 중복: ${l.n}`);
+      ns.add(l.n);
+      if (keys.has(l.key)) note(`${t.slug} 층 key 중복: ${l.key}`);
+      keys.add(l.key);
+      if (l.stocks.length === 0) note(`${t.slug} ${l.n}층에 종목이 없음`);
+      const inLayer = new Set<string>();
+      let anchors = 0;
+      for (const s of l.stocks) {
+        const tk = s.ticker.toUpperCase();
+        if (inLayer.has(tk)) note(`${t.slug} ${l.n}층에 ${tk} 가 두 번`);
+        inLayer.add(tk);
+        if (!s.why?.trim()) note(`${tk} (${t.slug} ${l.n}층) "왜 이 층인가" 가 비었음`);
+        // 넘지 않는 선 — 배치 설명에 매매 판단 표현이 들어가면 안 됩니다
+        if (/사세요|사야 |팔아야|매수하|매도하|추천합|목표가/.test(s.why ?? ""))
+          note(`${tk} 의 설명에 매매 표현: "${s.why}"`);
+        if (s.anchor) anchors++;
+      }
+      if (anchors > 1) note(`${t.slug} ${l.n}층에 축 종목이 ${anchors}개`);
+    }
+    const seq = [...ns].sort((a, b) => a - b);
+    if (seq.length && (seq[0] !== 1 || seq.some((v, i) => v !== i + 1)))
+      note(`${t.slug} 층 번호가 1부터 연속이 아님: ${seq.join(",")}`);
+  }
+
   /* ── 3. 층 목록이 테마 정의와 일치하는가 ───────────────────── */
   for (const [slug, t] of Object.entries(layers.themes)) {
     const th = themeMap.get(slug);

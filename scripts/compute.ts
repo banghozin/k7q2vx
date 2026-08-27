@@ -494,8 +494,38 @@ async function main() {
     return { from: oldTop, to: newTop, agoDays: HANDOVER_LOOKBACK };
   }
 
+  /**
+   * 테마에 속한 종목 목록 — **중복을 뺍니다.**
+   *
+   * 한 회사가 같은 테마의 두 층에 걸쳐 있을 수 있습니다. 실제로 우주·방산의
+   * 록히드 마틴이 1층(발사체 — 발사 합작사 지분)과 5층(무기 체계)에 함께
+   * 올라 있고, 그건 의도된 큐레이션입니다.
+   *
+   * 그런데 층을 그냥 펼쳐 붙이면 그 회사가 명단에 **두 번** 들어갑니다.
+   * 2026-08-27 에 확인한 결과:
+   *   - 대장주 순위에 LMT 가 1위와 2위로 나란히 떴습니다
+   *   - 1·2위가 같은 종목이라 점수 차가 없어 **"접전" 이 항상 켜졌습니다**
+   *   - 테마 중앙값에서 그 종목의 등락률이 두 번 세어졌습니다
+   *
+   * 층별 계산은 층마다 따로 도니 그대로 두고, **테마 단위 계산에서만**
+   * 중복을 뺍니다.
+   */
+  function themeMembers(theme: (typeof THEMES)[number]): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const layer of theme.layers) {
+      for (const stock of layer.stocks) {
+        const t = stock.ticker.trim().toUpperCase();
+        if (seen.has(t)) continue;
+        seen.add(t);
+        out.push(stock.ticker);
+      }
+    }
+    return out;
+  }
+
   for (const theme of THEMES) {
-    const tickers = theme.layers.flatMap((l) => l.stocks.map((s) => s.ticker));
+    const tickers = themeMembers(theme);
     const now = scoreLeaders(tickers, theme.slug, 0);
     const before = scoreLeaders(tickers, theme.slug, HANDOVER_LOOKBACK);
     const pure = now.filter((r) => !r.peripheral);
@@ -660,7 +690,7 @@ async function main() {
   > = {};
 
   for (const theme of THEMES) {
-    const tickers = theme.layers.flatMap((l) => l.stocks.map((s) => s.ticker));
+    const tickers = themeMembers(theme);
     const ranked = leaders[theme.slug]?.ranked ?? [];
     const pure = ranked.filter((r) => !r.peripheral);
     const fallback = pure[0]?.ticker ?? ranked[0]?.ticker ?? tickers[0];
