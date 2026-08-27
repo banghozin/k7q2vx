@@ -497,10 +497,8 @@ export function PracticeBoard() {
   /*
    * 도구를 물리고 푸는 곳.
    *
-   * **한 번 고르면 계속 물려 있습니다.** 하나 다 그리면 곧바로 같은 도구가
-   * 다시 물립니다(kline 의 onDrawEnd). 그러지 않으면 그릴 때마다 도구가 풀려서
-   * 다음에 끌면 화면만 움직이고, 그걸 모르면 "그리기가 안 된다"고 느낍니다.
-   * 같은 단추를 다시 누르면 풉니다.
+   * **한 번 그리면 도구가 풀리고 이동·선택으로 돌아옵니다.** 같은 단추를
+   * 다시 누르면 그때도 풀립니다.
    */
   const penRef = useRef({ color: penColor, size: penSize });
   penRef.current = { color: penColor, size: penSize };
@@ -513,8 +511,8 @@ export function PracticeBoard() {
    * 먹힙니다.** 그래서 이미 그어 둔 선을 누르면 골라지는 게 아니라 그 자리에
    * 새 선이 하나 더 생겼습니다. 점을 끌어 옮기는 것도 안 됐고요.
    *
-   * 위에 적어 둔 "계속 물려 있게" 가 원인입니다. 여러 개를 잇달아 그을 때는
-   * 편하지만 다 그리고 나서 고치려 들 때 빠져나올 길이 없었습니다.
+   * 한때는 하나 그릴 때마다 같은 도구를 다시 물렸는데 그게 원인이었습니다.
+   * 지금은 그리고 나면 여기로 돌아옵니다.
    */
   const stopDraw = useCallback(() => {
     toolRef.current = null;
@@ -536,12 +534,18 @@ export function PracticeBoard() {
     [refreshDrawings, stopDraw],
   );
 
-  /** 하나 다 그렸을 때 — 같은 도구를 다시 물립니다 */
+  /**
+   * 하나 다 그렸을 때 — **곧바로 이동·선택으로 돌아옵니다.**
+   *
+   * 예전에는 같은 도구를 다시 물렸습니다. 여러 개를 잇달아 그을 때는 편했지만
+   * 그리는 사람이 실제로 하는 일은 **한 줄 긋고 → 자리를 맞추고 → 다음 줄**
+   * 이라, 그을 때마다 «이동» 을 눌러야 했습니다. 도구를 다시 무는 쪽이 한 번
+   * 더 누르는 값이 싸므로 이쪽으로 뒤집습니다.
+   */
   const handleDrawEnd = useCallback(() => {
     refreshDrawings();
-    const key = toolRef.current;
-    if (key) chart.current?.startDraw(key, penRef.current);
-  }, [refreshDrawings]);
+    stopDraw();
+  }, [refreshDrawings, stopDraw]);
 
   const undo = useCallback(() => {
     chart.current?.undo();
@@ -776,7 +780,7 @@ export function PracticeBoard() {
             ) : (
               <p className="prac__penhint">
                 {tool
-                  ? "지금은 그리는 중입니다. 그어 둔 선을 고치려면 «이동» 을 누르세요."
+                  ? "한 번 그으면 이동·선택으로 돌아옵니다. 그때 자리를 맞추면 됩니다."
                   : "그려 둔 선을 누르면 골라집니다. 점을 끌면 자리를 옮길 수 있습니다."}
               </p>
             )}

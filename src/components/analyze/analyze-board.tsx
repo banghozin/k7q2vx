@@ -383,11 +383,18 @@ export function AnalyzeBoard({
     [stopDraw],
   );
 
+  /*
+   * 하나를 다 그리면 **곧바로 이동·선택으로 돌아옵니다.**
+   *
+   * 예전에는 같은 도구를 다시 물렸습니다. 여러 개를 잇달아 그을 때는 편했지만
+   * 그리는 사람이 실제로 하는 일은 **한 줄 긋고 → 자리를 맞추고 → 다음 줄**
+   * 이라, 그을 때마다 «이동» 을 눌러야 했습니다. 도구를 다시 무는 쪽이 한 번
+   * 더 누르는 값이 싸므로 이쪽으로 뒤집습니다.
+   */
   const handleDrawEnd = useCallback(() => {
     autoSave();
-    const key = toolRef.current;
-    if (key) chart.current?.startDraw(key, penRef.current);
-  }, [autoSave]);
+    stopDraw();
+  }, [autoSave, stopDraw]);
 
   /* ── 고저점 자동 찾기 ────────────────────────────────────────
    *
@@ -730,7 +737,7 @@ export function AnalyzeBoard({
             ) : (
               <p className="prac__penhint">
                 {tool
-                  ? "지금은 그리는 중입니다. 그어 둔 선을 고치려면 «이동» 을 누르세요."
+                  ? "한 번 그으면 이동·선택으로 돌아옵니다. 그때 자리를 맞추면 됩니다."
                   : "그려 둔 선을 누르면 골라집니다. 점을 끌면 자리를 옮길 수 있습니다."}
               </p>
             )}
