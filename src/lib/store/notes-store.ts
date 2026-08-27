@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import type { SavedDrawing } from "@/components/practice/kline";
 
 /**
  * 매매노트.
@@ -34,6 +35,23 @@ export type Target = {
   portion: number;
 };
 
+/**
+ * 매매를 걸 때 **얼려 둔** 분석 그림.
+ *
+ * 왜 복사해서 얼리는가: 분석 화면(`/analyze`)의 그림은 종목·봉 단위마다
+ * 한 벌뿐이라 나중에 선을 고치면 덮어써집니다. 그대로 참조만 해 두면
+ * **지난 매매의 근거가 소급해서 바뀝니다.** 그러면 회고가 거짓말이 됩니다.
+ * 그래서 그 시점의 그림을 복사해 이 매매에 붙여 둡니다.
+ */
+export type TradeChart = {
+  /** 봉 단위 (`1d`, `60m` …) */
+  tf: string;
+  /** 그때 그려져 있던 것 (복사본) */
+  drawings: SavedDrawing[];
+  /** 얼린 시각 */
+  at: string;
+};
+
 export type Trade = {
   id: string;
   ticker: string;
@@ -57,6 +75,9 @@ export type Trade = {
   /** 적어둔 손절가를 지켰는가 — 원칙 준수 카운터의 재료 */
   followedStop?: boolean;
   review?: string;
+
+  /** 진입할 때 보고 있던 차트 그림. 없을 수도 있습니다 */
+  chart?: TradeChart;
 
   createdAt: string;
 };

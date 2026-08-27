@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { placementsOf, searchStocks } from "@/data/themes";
 import {
   REASON_TAGS,
@@ -8,6 +9,7 @@ import {
   useNotes,
   type ReasonTag,
 } from "@/lib/store/notes-store";
+import { useAnalysis, type Sheet } from "@/lib/store/analysis-store";
 
 const money = (n: number) =>
   `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
@@ -51,12 +53,47 @@ const num = (s: string) => {
   return Number.isFinite(v) ? v : 0;
 };
 
-export function TradeForm({ onDone }: { onDone: () => void }) {
+export function TradeForm({
+  onDone,
+  initialTicker,
+}: {
+  onDone: () => void;
+  /** 분석 화면에서 넘어왔을 때 미리 채워 둘 종목 */
+  initialTicker?: string;
+}) {
   const add = useNotes((s) => s.add);
   const settings = useNotes((s) => s.settings);
+  const sheets = useAnalysis((s) => s.sheets);
 
-  const [d, setD] = useState<Draft>(emptyDraft);
+  const [d, setD] = useState<Draft>(() => {
+    const base = emptyDraft();
+    if (!initialTicker) return base;
+    const hit = searchStocks(initialTicker, 1)[0];
+    if (!hit) return base;
+    return { ...base, ticker: hit.ticker, name: hit.stock.name };
+  });
   const [query, setQuery] = useState("");
+
+  /*
+   * 이 종목으로 분석 화면에 그려 둔 것이 있으면 함께 얼려 둘 수 있게 합니다.
+   * "내가 이 선을 보고 샀다" 가 남아야 나중에 회고가 됩니다.
+   * 봉 단위가 여럿이면(일봉·60분봉) 고르게 합니다 — 대개 하나뿐입니다.
+   */
+  const mySheets: Sheet[] = useMemo(() => {
+    if (!d.ticker) return [];
+    return Object.values(sheets)
+      .filter((s) => s.ticker === d.ticker.toUpperCase() && s.drawings.length > 0)
+      .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+  }, [sheets, d.ticker]);
+
+  const [attachTf, setAttachTf] = useState<string | null>(null);
+
+  // 종목을 고르거나 바꾸면 가장 최근에 손댄 분석을 기본으로 붙여 둡니다
+  useEffect(() => {
+    setAttachTf(mySheets[0]?.tf ?? null);
+  }, [mySheets]);
+
+  const attached = mySheets.find((s) => s.tf === attachTf) ?? null;
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) =>
     setD((prev) => ({ ...prev, [k]: v }));
@@ -118,6 +155,17 @@ export function TradeForm({ onDone }: { onDone: () => void }) {
       ].filter((t) => t.price > 0),
       reasons: d.reasons,
       memo: d.memo,
+      /*
+       * 참조가 아니라 **복사**입니다. 나중에 분석 화면에서 선을 고쳐도
+       * 이 매매에 붙은 그림은 그대로 남습니다.
+       */
+      chart: attached
+        ? {
+            tf: attached.tf,
+            drawings: JSON.parse(JSON.stringify(attached.drawings)),
+            at: new Date().toISOString(),
+          }
+        : undefined,
     });
     onDone();
   }
@@ -469,6 +517,54 @@ export function TradeForm({ onDone }: { onDone: () => void }) {
           솔직하게 고를수록 나중에 본인 통계가 쓸모 있어집니다.
         </span>
       </div>
+
+      {/* ⑥ 그때 본 차트 — 분석 화면에 그려 둔 것이 있을 때만 나옵니다 */}
+      {d.ticker && (
+        <div className="field">
+          <label>그때 본 차트</label>
+          {mySheets.length === 0 ? (
+            <span className="hint">
+              분석 화면에 {d.ticker} 로 그려 둔 것이 없습니다.{" "}
+              <Link href={`/analyze?ticker=${d.ticker}`} className="ilink">
+                지금 그리러 가기
+              </Link>
+            </span>
+          ) : (
+            <>
+              <div className="attach">
+                <button
+                  type="button"
+                  className={`attach__opt${attachTf === null ? " is-on" : ""}`}
+                  onClick={() => setAttachTf(null)}
+                >
+                  안 붙임
+                </button>
+                {mySheets.map((s) => (
+                  <button
+                    key={s.tf}
+                    type="button"
+                    className={`attach__opt${attachTf === s.tf ? " is-on" : ""}`}
+                    onClick={() => setAttachTf(s.tf)}
+                  >
+                    {s.tf} · 선 {s.drawings.length}개
+                  </button>
+                ))}
+              </div>
+              <span className="hint">
+                {attached ? (
+                  <>
+                    지금 그려져 있는 것을 <strong>복사해서</strong> 이 매매에
+                    붙여 둡니다. 나중에 분석 화면에서 선을 고쳐도 이 매매에
+                    붙은 그림은 그대로 남습니다.
+                  </>
+                ) : (
+                  "붙여 두면 청산할 때 그 선 위로 실제 봉이 어떻게 지나갔는지 볼 수 있습니다."
+                )}
+              </span>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="field">
         <label htmlFor="tf-memo">메모</label>

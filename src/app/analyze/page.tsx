@@ -10,8 +10,9 @@ export const metadata: Metadata = {
 export default async function AnalyzePage({
   searchParams,
 }: {
-  searchParams: Promise<{ ticker?: string }>;
+  searchParams: Promise<{ ticker?: string; tf?: string; trade?: string }>;
 }) {
-  const { ticker } = await searchParams;
-  return <AnalyzeBoard initialTicker={ticker} />;
+  // `trade` 가 붙어 오면 매매노트에서 넘어온 회고입니다 — 그때 얼려 둔 그림을 봅니다
+  const { ticker, tf, trade } = await searchParams;
+  return <AnalyzeBoard initialTicker={ticker} initialTf={tf} tradeId={trade} />;
 }

@@ -36,6 +36,22 @@ export function NotesView() {
 
   const [tab, setTab] = useState<Tab>("open");
   const [adding, setAdding] = useState(false);
+  const [prefill, setPrefill] = useState<string | undefined>(undefined);
+
+  /*
+   * 분석 화면에서 "이 분석으로 매매 기록"을 누르면 `?new=1&ticker=NVDA` 로
+   * 넘어옵니다. 폼을 펴 두고 종목도 미리 채워, 그린 것에서 기록까지 한 번에
+   * 이어지게 합니다. 주소는 곧바로 지웁니다 — 새로고침할 때마다 폼이 다시
+   * 열리면 성가십니다.
+   */
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (!q.get("new")) return;
+    setAdding(true);
+    const t = q.get("ticker");
+    if (t) setPrefill(t.toUpperCase());
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
 
   const open = trades.filter((t) => t.status === "open");
   const closed = trades.filter((t) => t.status === "closed");
@@ -152,7 +168,13 @@ export function NotesView() {
             }}
           >
             <h3 style={{ marginBottom: "1.25rem" }}>새 매매 기록</h3>
-            <TradeForm onDone={() => setAdding(false)} />
+            <TradeForm
+              initialTicker={prefill}
+              onDone={() => {
+                setAdding(false);
+                setPrefill(undefined);
+              }}
+            />
           </div>
         ) : (
           <button
@@ -381,6 +403,28 @@ function TradeCard({ trade }: { trade: Trade }) {
       {trade.memo && (
         <p style={{ fontSize: ".84rem", color: "var(--ink-2)", marginBottom: 0 }}>
           {trade.memo}
+        </p>
+      )}
+
+      {/*
+       * 진입할 때 그려 뒀던 차트로 넘어가는 자리.
+       * 그 화면은 최신 봉까지 다 그리므로, 그때 그은 선 위로 이후에 실제
+       * 값이 어떻게 지나갔는지가 그대로 보입니다.
+       */}
+      {trade.chart && trade.chart.drawings.length > 0 && (
+        <p style={{ marginTop: ".65rem", marginBottom: 0, fontSize: ".8rem" }}>
+          <Link
+            href={`/analyze?ticker=${trade.ticker}&tf=${trade.chart.tf}&trade=${trade.id}`}
+            className="ilink"
+          >
+            그때 그린 차트 보기
+          </Link>
+          <span style={{ color: "var(--ink-4)" }}>
+            {" "}
+            — {trade.chart.tf} · 선 {trade.chart.drawings.length}개 ·{" "}
+            {trade.chart.at.slice(0, 10)} 기준
+            {trade.status === "closed" && " · 이후 실제 봉과 겹쳐 보입니다"}
+          </span>
         </p>
       )}
 

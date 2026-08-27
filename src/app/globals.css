@@ -846,6 +846,42 @@ button {
   color: var(--ink-4);
 }
 
+/* 본문 속 링크 — 밑줄로만 표시합니다 */
+.ilink {
+  color: var(--brass);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* 매매에 붙일 분석 그림 고르기 */
+.attach {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.attach__opt {
+  font-size: 0.75rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.attach__opt:hover {
+  color: var(--ink);
+  border-color: var(--ink-3);
+}
+
+.attach__opt.is-on {
+  color: var(--bg);
+  background: var(--brass);
+  border-color: var(--brass);
+}
+
 input[type="text"],
 input[type="number"],
 input[type="date"],
@@ -1617,6 +1653,41 @@ tbody tr:hover {
 
 .anz__saved {
   color: var(--brass);
+}
+
+.anz__tonotes {
+  margin-top: 0.5rem;
+  width: 100%;
+  text-align: center;
+  text-decoration: none;
+}
+
+/* 매매노트에서 넘어온 회고 — 지금 그리는 화면과 헷갈리면 안 됩니다 */
+.anz__review {
+  border: 1px solid var(--brass-dim);
+  border-left-width: 3px;
+  background: var(--ground-2);
+  padding: 0.7rem 0.9rem;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.anz__legend {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.75rem;
+  color: var(--ink-3);
+}
+
+.anz__legend em {
+  font-style: normal;
+}
+
+.anz__reviewmemo {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  color: var(--ink-3);
 }
 
 /* ── 지난 훈련 기록 (차트 위에 덮는 판) ─────────────────────────── */

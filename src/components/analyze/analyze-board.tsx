@@ -10,6 +10,7 @@ import {
   type SavedDrawing,
 } from "@/components/practice/kline";
 import { recentSheets, useAnalysis } from "@/lib/store/analysis-store";
+import { useNotes } from "@/lib/store/notes-store";
 
 /**
  * 차트 분석.
@@ -108,6 +109,11 @@ const WIDTHS = [
   { size: 3.5, label: "굵게" },
 ];
 
+/* 회고 모드에서 실제로 사고판 자리를 표시하는 색 (한국 관행: 상승 빨강) */
+const ENTRY_COLOR = "#e0564f";
+const EXIT_COLOR = "#4f86e0";
+const STOP_COLOR = "#8a8378";
+
 /** 4시간봉을 만들 때만 씁니다 — 60분봉 넷을 하나로 */
 function groupBars(bars: Bar[], n: number): Bar[] {
   if (n <= 1) return bars;
@@ -127,10 +133,21 @@ function groupBars(bars: Bar[], n: number): Bar[] {
   return out;
 }
 
-export function AnalyzeBoard({ initialTicker }: { initialTicker?: string }) {
+export function AnalyzeBoard({
+  initialTicker,
+  initialTf,
+  tradeId,
+}: {
+  initialTicker?: string;
+  initialTf?: string;
+  /** 매매노트에서 넘어온 경우 — 그때 얼려 둔 그림을 봅니다 */
+  tradeId?: string;
+}) {
   const chart = useRef<KlineHandle>(null);
   const [ticker, setTicker] = useState((initialTicker ?? "NVDA").toUpperCase());
-  const [tfKey, setTfKey] = useState("1d");
+  const [tfKey, setTfKey] = useState(
+    initialTf && TIMEFRAMES.some((t) => t.key === initialTf) ? initialTf : "1d",
+  );
   const [bars, setBars] = useState<Bar[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -149,6 +166,22 @@ export function AnalyzeBoard({ initialTicker }: { initialTicker?: string }) {
   const hydrated = useAnalysis((s) => s.hydrated);
   const saveSheet = useAnalysis((s) => s.save);
   const removeSheet = useAnalysis((s) => s.remove);
+
+  /*
+   * ── 회고 모드 ──────────────────────────────────────────────
+   *
+   * 매매노트에서 "그때 그린 차트 보기"로 들어온 경우입니다. 진입할 때
+   * 얼려 둔 그림을 올리고, 지금 그리는 그림은 건드리지 않습니다.
+   *
+   * **자동 저장을 반드시 꺼야 합니다.** 켜 둔 채로 지난 매매를 열면 그때
+   * 그림이 지금 분석을 덮어씁니다. 과거를 보러 왔다가 현재를 잃는 셈입니다.
+   */
+  const trades = useNotes((s) => s.trades);
+  const review = useMemo(
+    () => (tradeId ? trades.find((t) => t.id === tradeId) ?? null : null),
+    [tradeId, trades],
+  );
+  const reviewing = Boolean(review?.chart);
 
   const tfNow = TIMEFRAMES.find((t) => t.key === tfKey) ?? TIMEFRAMES[5];
   const penRef = useRef({ color: penColor, size: penSize });
@@ -208,26 +241,63 @@ export function AnalyzeBoard({ initialTicker }: { initialTicker?: string }) {
     const w = chart.current?.width() ?? 0;
     if (w > 0) chart.current?.fitAll(w < 640 ? 90 : 240);
 
-    // 저장해 둔 것이 있으면 그대로 다시 그립니다
-    const sheet = sheets[`${ticker}:${tfKey}`];
-    if (sheet?.drawings.length) {
-      chart.current?.importDrawings(sheet.drawings);
-      setSavedAt(sheet.updatedAt);
+    if (review?.chart) {
+      /*
+       * 회고 모드 — 진입할 때 얼려 둔 그림을 올립니다. 여기에 진입가와
+       * 청산가를 수평선으로 얹으면 "그때 그은 선"과 "실제로 사고판 자리"가
+       * 한 화면에 겹칩니다. 차트는 최신 봉까지 다 그리므로 그 뒤에 값이
+       * 어디로 갔는지도 같이 보입니다.
+       */
+      const marks: SavedDrawing[] = [
+        {
+          name: "horizontalStraightLine",
+          points: [{ value: review.entryPrice }],
+          color: ENTRY_COLOR,
+          size: 1.4,
+        },
+      ];
+      if (review.stopPrice > 0) {
+        marks.push({
+          name: "horizontalStraightLine",
+          points: [{ value: review.stopPrice }],
+          color: STOP_COLOR,
+          size: 1,
+        });
+      }
+      if (review.exitPrice != null && review.exitPrice > 0) {
+        marks.push({
+          name: "horizontalStraightLine",
+          points: [{ value: review.exitPrice }],
+          color: EXIT_COLOR,
+          size: 1.4,
+        });
+      }
+      chart.current?.importDrawings([...review.chart.drawings, ...marks]);
+      setSavedAt(review.chart.at);
     } else {
-      setSavedAt(null);
+      // 저장해 둔 것이 있으면 그대로 다시 그립니다
+      const sheet = sheets[`${ticker}:${tfKey}`];
+      if (sheet?.drawings.length) {
+        chart.current?.importDrawings(sheet.drawings);
+        setSavedAt(sheet.updatedAt);
+      } else {
+        setSavedAt(null);
+      }
     }
     setTimeout(refreshDrawings, 200);
     // sheets 는 저장할 때마다 바뀌므로 의존성에서 뺍니다 — 넣으면 저장할 때
     // 마다 차트를 다시 그리게 됩니다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chartReady, feed, tfNow, ticker, tfKey, refreshDrawings]);
+  }, [chartReady, feed, tfNow, ticker, tfKey, refreshDrawings, review]);
 
   /* ── 그린 것 저장 ────────────────────────────────────────────── */
   const save = useCallback(() => {
+    // 회고 모드에서는 절대 저장하지 않습니다 — 지금 그림을 덮어쓰게 됩니다
+    if (reviewing) return;
     const list = chart.current?.exportDrawings() ?? [];
     saveSheet(ticker, tfKey, list);
     setSavedAt(new Date().toISOString());
-  }, [saveSheet, ticker, tfKey]);
+  }, [saveSheet, ticker, tfKey, reviewing]);
 
   /*
    * 그릴 때마다 자동으로 저장합니다.
@@ -348,7 +418,7 @@ export function AnalyzeBoard({ initialTicker }: { initialTicker?: string }) {
               {change.toFixed(2)}%
             </span>
           )}
-          {savedAt && <span className="anz__saved">저장됨</span>}
+          {savedAt && !reviewing && <span className="anz__saved">저장됨</span>}
         </div>
 
         <div className="prac__actions">
@@ -367,11 +437,44 @@ export function AnalyzeBoard({ initialTicker }: { initialTicker?: string }) {
           >
             전체 보기
           </button>
-          <button type="button" className="btn" onClick={save}>
-            저장
-          </button>
+          {reviewing ? (
+            <a className="btn" href="/notes">
+              매매노트로
+            </a>
+          ) : (
+            <button type="button" className="btn" onClick={save}>
+              저장
+            </button>
+          )}
         </div>
       </header>
+
+      {/*
+        회고 모드 알림. 지금 그리는 화면과 헷갈리면 안 되므로 눈에 띄게 둡니다.
+      */}
+      {reviewing && review && (
+        <div className="anz__review">
+          <strong>{review.entryDate} 진입 때 그려 뒀던 그림</strong>입니다.
+          지금 그리는 분석이 아니고, 여기서 손댄 것은 저장되지 않습니다.
+          <span className="anz__legend">
+            <em style={{ color: ENTRY_COLOR }}>■</em> 진입 $
+            {review.entryPrice}
+            {review.stopPrice > 0 && (
+              <>
+                {" "}
+                <em style={{ color: STOP_COLOR }}>■</em> 손절 ${review.stopPrice}
+              </>
+            )}
+            {review.exitPrice != null && (
+              <>
+                {" "}
+                <em style={{ color: EXIT_COLOR }}>■</em> 청산 ${review.exitPrice}
+              </>
+            )}
+          </span>
+          {review.memo && <p className="anz__reviewmemo">“{review.memo}”</p>}
+        </div>
+      )}
 
       <div className="prac__body">
         <aside className={`prac__tools${panelOpen ? " is-open" : ""}`}>
@@ -511,6 +614,14 @@ export function AnalyzeBoard({ initialTicker }: { initialTicker?: string }) {
                   모두 지우기
                 </button>
               </div>
+              {!reviewing && (
+                <a
+                  className="btn btn--ghost anz__tonotes"
+                  href={`/notes?new=1&ticker=${ticker}`}
+                >
+                  이 분석으로 매매 기록
+                </a>
+              )}
             </section>
           )}
 
