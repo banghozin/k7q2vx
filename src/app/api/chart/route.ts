@@ -17,6 +17,21 @@ const UA =
  * 화면에서 만듭니다.
  */
 const OK_INTERVAL = new Set(["5m", "15m", "30m", "60m", "1d", "1wk", "1mo"]);
+
+/*
+ * ⚠️ `range=max` 는 **요청한 봉 단위를 무시합니다.** 전체 기간 길이를 보고
+ * 야후가 제 마음대로 정합니다. 2026-08-27 에 재어 본 것 — 전부 `1mo` 로
+ * 요청했는데:
+ *
+ *   ETN·MU (1984년 상장)  → 3개월봉(분기봉)
+ *   NVDA   (1999년 상장)  → 1개월봉
+ *   IONQ   (2021년 상장)  → 1주봉
+ *   GEV    (2024년 상장)  → 1주봉
+ *
+ * 그래서 "월봉" 버튼이 종목에 따라 분기봉이나 주봉을 보여주고 있었습니다.
+ * **기간을 명시하면 어떤 값이든 요청한 단위가 그대로 옵니다.** 월봉은
+ * `40y` 를 씁니다(ETN 481봉 = 40년치). `max` 는 목록에 두되 쓰지 마세요.
+ */
 const OK_RANGE = new Set([
   "1mo",
   "3mo",
@@ -25,6 +40,11 @@ const OK_RANGE = new Set([
   "2y",
   "5y",
   "10y",
+  "15y",
+  "20y",
+  "25y",
+  "30y",
+  "40y",
   "max",
   "7d",
   "60d",
@@ -41,6 +61,8 @@ type YahooChart = {
         currency?: string;
         exchangeName?: string;
         longName?: string;
+        /** 야후가 실제로 돌려준 봉 단위. 요청한 것과 다를 수 있습니다 */
+        dataGranularity?: string;
       };
       timestamp?: number[];
       indicators?: {
@@ -96,11 +118,25 @@ export async function GET(req: Request) {
       const h = q.high?.[i];
       const l = q.low?.[i];
       const c = q.close?.[i];
+      /*
+       * `typeof x === "number"` 만 보면 **NaN 도 통과**하고 0·음수도
+       * 통과합니다. 그런 봉 하나가 섞이면 고저점 검출이 통째로 멈추고
+       * (NaN 비교는 전부 거짓) 차트 눈금도 0까지 늘어납니다.
+       */
       if (
         typeof o !== "number" ||
         typeof h !== "number" ||
         typeof l !== "number" ||
         typeof c !== "number"
+      )
+        continue;
+      // typeof 만으로는 NaN 이 통과합니다 — 위 설명 참고
+      if (
+        !Number.isFinite(o) ||
+        !Number.isFinite(h) ||
+        !Number.isFinite(l) ||
+        !Number.isFinite(c) ||
+        c <= 0
       )
         continue;
       candles.push({
@@ -111,6 +147,33 @@ export async function GET(req: Request) {
         close: c,
         volume: typeof q.volume?.[i] === "number" ? (q.volume[i] as number) : 0,
       });
+    }
+
+    /*
+     * 야후는 주봉·월봉에 **진행 중인 기간 봉을 하나 더** 붙여 줍니다.
+     * 2026-08-27 에 확인한 것:
+     *
+     *   1wk … 08-17(209.x) · 08-24(209.66) · 08-26(209.66)  ← 마지막이 중복
+     *   1mo … 07-01(200.75) · 08-01(209.66) · 08-26(209.66)  ← 마지막이 중복
+     *
+     * 앞의 봉이 이미 오늘까지 반영하고 있어서 값이 똑같습니다. 그대로 두면
+     * 차트에 가짜 봉이 하나 더 그려지고, 등락률이 **0.00%** 로 나옵니다.
+     *
+     * 간격의 중앙값으로 재는 방법을 먼저 써 봤는데 **월봉에서 안 걸립니다** —
+     * 08-01 에서 08-26 은 25일이라 평소 간격(30일)의 절반을 넘습니다.
+     * 그래서 봉 단위를 직접 보고, 마지막 봉이 앞 봉과 **같은 기간 안에**
+     * 들어 있으면 덧붙은 것으로 봅니다. 일봉·분봉에는 적용하지 않습니다.
+     */
+    const PERIOD_SEC: Record<string, number> = {
+      // 한 칸이 최소 며칠인가. 2월(28일)에도 안 걸리게 월봉은 27일로 둡니다.
+      "1wk": 6 * 86400,
+      "1mo": 27 * 86400,
+    };
+    const minSpan = PERIOD_SEC[interval];
+    if (minSpan && candles.length >= 2) {
+      const a = candles[candles.length - 2].time;
+      const b = candles[candles.length - 1].time;
+      if (b - a < minSpan) candles.pop();
     }
 
     const last = candles.at(-1);
@@ -128,6 +191,12 @@ export async function GET(req: Request) {
         changePct,
         currency: result.meta.currency ?? null,
         exchange: result.meta.exchangeName ?? null,
+        /*
+         * 요청한 봉 단위와 **실제로 온 것**. range=max 처럼 야후가 제멋대로
+         * 바꾸는 경우가 있어 나중에 되짚을 수 있게 같이 넘깁니다.
+         */
+        interval,
+        granularity: result.meta.dataGranularity ?? null,
       },
       {
         headers: {

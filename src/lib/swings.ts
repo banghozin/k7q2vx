@@ -22,6 +22,12 @@ export type SwingBar = {
 };
 
 export type Swing = {
+  /**
+   * 몇 번째 봉인가.
+   *
+   * ⚠️ 값이 성치 않은 봉(NaN·0·음수)을 걸러낸 **뒤의** 번호입니다. 원본
+   * 배열의 번호와 다를 수 있으니 위치를 되짚을 때는 `time` 을 쓰세요.
+   */
   index: number;
   /** 봉의 시각 (초 단위) */
   time: number;
@@ -41,7 +47,19 @@ export type Swing = {
  *
  * @param threshold 0.05 이면 5% 되돌릴 때 방향이 바뀐 것으로 봅니다
  */
-export function detectSwings(bars: SwingBar[], threshold = 0.05): Swing[] {
+export function detectSwings(input: SwingBar[], threshold = 0.05): Swing[] {
+  /*
+   * 값이 성한 봉만 씁니다. **NaN 이 하나만 섞여도 검출이 통째로 멈춥니다** —
+   * NaN 과의 비교는 전부 거짓이라 방향이 영영 정해지지 않기 때문입니다.
+   * 0이나 음수가 섞이면 그 자리로 선이 그어져 차트 눈금이 무너집니다.
+   */
+  const bars = input.filter(
+    (b) =>
+      Number.isFinite(b.high) &&
+      Number.isFinite(b.low) &&
+      b.low > 0 &&
+      b.high >= b.low,
+  );
   if (bars.length < 3 || threshold <= 0) return [];
 
   const out: Swing[] = [];

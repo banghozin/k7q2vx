@@ -56,7 +56,7 @@ const TIMEFRAMES: {
   { key: "4h", label: "4시간", interval: "60m", range: "730d", group: 4, period: { type: "hour", span: 4 } },
   { key: "1d", label: "일봉", interval: "1d", range: "10y", group: 1, period: { type: "day", span: 1 } },
   { key: "1wk", label: "주봉", interval: "1wk", range: "10y", group: 1, period: { type: "week", span: 1 } },
-  { key: "1mo", label: "월봉", interval: "1mo", range: "max", group: 1, period: { type: "month", span: 1 } },
+  { key: "1mo", label: "월봉", interval: "1mo", range: "40y", group: 1, period: { type: "month", span: 1 } },
 ];
 
 const DRAW_GROUPS: {

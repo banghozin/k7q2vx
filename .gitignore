@@ -29,3 +29,6 @@ CLAUDE.md
 
 # Claude Code 개인 설정 (기기마다 다름, 공유 대상 아님)
 .claude/settings.local.json
+
+# 검증용 임시 하네스 — 공개 저장소이므로 실수로도 올라가면 안 됩니다
+public/_*.html
