@@ -35,13 +35,43 @@ const mono = IBM_Plex_Mono({
   display: "swap",
 });
 
+/**
+ * 사이트 주소.
+ *
+ * 공유 카드(Open Graph)와 sitemap 이 **절대 주소**를 요구합니다. 상대 주소로
+ * 두면 카톡·디스코드가 그림을 못 찾아 카드가 비어 버립니다. 배포처가 바뀔 수
+ * 있으므로 환경변수를 먼저 보고, 없으면 지금 주소를 씁니다.
+ */
+export const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ??
+  "https://stocksinfo.vercel.app";
+
+const TITLE = "테마 지도 — 미국주식을 산업의 층으로";
+const DESC =
+  "미국 상장 종목을 밸류체인의 층으로 세워 보여주는 한국어 산업 구조 지도. 매수·매도 의견을 담지 않습니다.";
+
 export const metadata: Metadata = {
-  title: {
-    default: "테마 지도 — 미국주식을 산업의 층으로",
-    template: "%s · 테마 지도",
+  metadataBase: new URL(SITE_URL),
+  title: { default: TITLE, template: "%s · 테마 지도" },
+  description: DESC,
+  applicationName: "테마 지도",
+  /*
+   * 링크를 붙였을 때 뜨는 카드.
+   *
+   * 이게 없으면 카톡·디스코드에 **제목 없는 맨 주소**만 뜹니다. 그림은
+   * `opengraph-image.tsx` 가 빌드할 때 만들어 두고 Next 가 알아서 답니다.
+   */
+  openGraph: {
+    type: "website",
+    siteName: "테마 지도",
+    locale: "ko_KR",
+    url: SITE_URL,
+    title: TITLE,
+    description: DESC,
   },
-  description:
-    "미국 상장 종목을 밸류체인의 층으로 세워 보여주는 한국어 산업 구조 지도. 매수·매도 의견을 담지 않습니다.",
+  twitter: { card: "summary_large_image", title: TITLE, description: DESC },
+  // 검색엔진에 열어 둡니다. 담기는 내용은 이미 공개된 것뿐입니다
+  robots: { index: true, follow: true },
 };
 
 export const viewport: Viewport = {

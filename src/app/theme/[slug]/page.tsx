@@ -34,9 +34,19 @@ export async function generateMetadata({
   const { slug } = await params;
   const theme = getTheme(slug);
   if (!theme) return {};
+  const description = `${theme.tagline} — ${theme.question}`;
   return {
     title: theme.name,
-    description: `${theme.tagline} — ${theme.question}`,
+    description,
+    // 링크로 넘길 때 이 테마의 카드가 뜨게 합니다 (그림은 opengraph-image.tsx)
+    openGraph: {
+      type: "article",
+      title: `${theme.name} — 테마 지도`,
+      description,
+      url: `/theme/${theme.slug}`,
+    },
+    twitter: { card: "summary_large_image", title: theme.name, description },
+    alternates: { canonical: `/theme/${theme.slug}` },
   };
 }
 
