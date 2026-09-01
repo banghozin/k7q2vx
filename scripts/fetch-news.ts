@@ -243,6 +243,29 @@ async function main() {
   await mkdir(DIR, { recursive: true });
   let added = 0;
 
+  /*
+   * 이미 보관한 주소를 **달을 가리지 않고** 모읍니다.
+   *
+   * 예전에는 달 파일 안에서만 걸렀습니다. 그런데 매체가 **같은 기사를 날짜만
+   * 바꿔 다시 내보냅니다** — 실제로 이런 것들이 있었습니다.
+   *
+   *   MarketWatch  8/31 22:00  →  9/1 18:30   (같은 URL·같은 제목)
+   *   CNBC         8/31 20:50  →  9/1 13:22
+   *
+   * 날짜가 달을 넘기면 8월 파일과 9월 파일에 각각 들어가고, 두 파일 다
+   * 상대를 모르니 걸러지지 않습니다. 그렇게 생긴 중복이 화면용 파일까지
+   * 올라가 **같은 기사가 두 번 뜨고**, 무결성 검사가 갱신을 멈춰 세웠습니다.
+   * 9월 1일에 갑자기 터진 것이 이 때문입니다 — 한 달 내내 숨어 있다가
+   * 달이 바뀌는 날에만 드러나는 구멍이었습니다.
+   *
+   * 처음 본 날짜를 남깁니다. "이 기사가 언제 처음 나왔나" 가 아카이브가
+   * 답해야 할 것이고, 다시 내보낸 날짜는 그 답이 아닙니다.
+   */
+  const already = new Set<string>();
+  for (const f of await readAllMonths()) {
+    for (const it of f.items ?? []) already.add(it.u);
+  }
+
   for (const [month, fresh] of byMonth) {
     const path = `${DIR}/${month}.json`;
     let existing: MonthFile = { month, updatedAt: "", items: [] };
@@ -252,12 +275,26 @@ async function main() {
       // 그 달의 첫 기사입니다
     }
 
-    const seen = new Set(existing.items.map((x) => x.u));
+    let here = 0;
     for (const a of fresh) {
-      if (seen.has(a.u)) continue;
+      if (already.has(a.u)) continue;
       existing.items.push(a);
-      seen.add(a.u);
+      already.add(a.u);
       added++;
+      here++;
+    }
+
+    /*
+     * **새로 담은 것이 없으면 건드리지 않습니다.**
+     *
+     * 예전에는 `updatedAt` 을 늘 새로 찍어서, 기사가 한 건도 안 늘어도 파일이
+     * 바뀐 것으로 잡혔습니다. 그러면 자동 실행이 그때마다 커밋을 하고 **배포가
+     * 한 번 나갑니다.** 하루 네 번 도는데 대부분은 새 기사가 없는 실행입니다.
+     * 배포 한도를 다른 사이트와 나눠 쓰는 처지라 그냥 버리는 셈이었습니다.
+     */
+    if (here === 0) {
+      console.log(`[news] ${month}.json — 새 기사 없음, 그대로 둡니다`);
+      continue;
     }
 
     // 최신이 위로
@@ -267,7 +304,7 @@ async function main() {
 
     await writeFile(path, JSON.stringify(existing) + "\n", "utf8");
     console.log(
-      `[news] ${month}.json — 누적 ${existing.items.length}건 (${(
+      `[news] ${month}.json — ${here}건 추가, 누적 ${existing.items.length}건 (${(
         JSON.stringify(existing).length / 1024
       ).toFixed(1)}KB)`,
     );
@@ -298,8 +335,15 @@ async function main() {
 
   const tickerNews: Archived[] = [];
   const marketNews: Archived[] = [];
+  /*
+   * 달 파일에 이미 중복이 들어가 있더라도 화면까지 새어 나가지는 않게 합니다.
+   * 위에서 막았지만, 예전에 쌓인 것이 남아 있을 수 있습니다.
+   */
+  const put = new Set<string>();
   for (const [, items] of byMonthAll(await readAllMonths())) {
     for (const a of items) {
+      if (put.has(a.u)) continue;
+      put.add(a.u);
       const t = new Date(a.d).getTime();
       if (a.tk.length > 0) {
         if (t >= tickerCutoff) tickerNews.push(a);
@@ -345,6 +389,31 @@ async function main() {
     count: recent.length,
     items: recent,
   };
+  /*
+   * 화면용 파일도 **내용이 같으면 다시 쓰지 않습니다.**
+   *
+   * `updatedAt` 만 새로 찍어도 파일이 바뀐 것으로 잡혀 배포가 나갑니다.
+   * 기사 목록이 그대로면 화면도 그대로이므로 그냥 둡니다. 기간이 지나
+   * 뒤쪽 기사가 빠지는 것도 목록 변화라 여기서 잡힙니다.
+   */
+  let sameAsBefore = false;
+  try {
+    const old = JSON.parse(
+      await readFile(`${DIR}/recent.json`, "utf8"),
+    ) as typeof recentFile;
+    sameAsBefore = JSON.stringify(old.items) === JSON.stringify(recent);
+  } catch {
+    // 첫 실행입니다
+  }
+
+  if (sameAsBefore) {
+    console.log(
+      `[news] 새로 보관한 기사 ${added}건 · 화면용 파일은 그대로라 다시 쓰지 않습니다 ` +
+        `(${recent.length}건)`,
+    );
+    return;
+  }
+
   await writeFile(
     `${DIR}/recent.json`,
     JSON.stringify(recentFile) + "\n",

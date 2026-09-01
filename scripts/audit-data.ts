@@ -189,6 +189,26 @@ async function main() {
       note(`티커는 있는데 테마가 없음: ${it.tk.join(",")}`);
   }
 
+  /* ── 5-b. 달 파일끼리 같은 기사를 들고 있지 않은가 ──────────────
+   *
+   * 매체는 **같은 기사를 날짜만 바꿔 다시 내보냅니다.** 그 날짜가 달을
+   * 넘기면 8월 파일과 9월 파일에 각각 들어가고, 예전에는 달 파일 안에서만
+   * 걸렀기 때문에 아무도 못 잡았습니다. 화면용 파일에서야 드러났는데,
+   * 그때는 이미 아카이브가 더러워진 뒤입니다.
+   */
+  const seenAcross = new Map<string, string>();
+  for (const f of await readdir(`${DIR}/news`)) {
+    if (!/^\d{4}-\d{2}\.json$/.test(f)) continue;
+    const m = await load<{ items: { u: string }[] }>(`news/${f}`);
+    for (const it of m.items ?? []) {
+      const before = seenAcross.get(it.u);
+      if (before && before !== f)
+        note(`달 파일끼리 같은 기사: ${before} ↔ ${f} — ${it.u.slice(0, 46)}`);
+      else if (before) note(`${f} 안에 같은 기사가 두 번: ${it.u.slice(0, 46)}`);
+      seenAcross.set(it.u, f);
+    }
+  }
+
   console.log(
     `[audit] 종목 ${Object.keys(stocks.stocks).length} · 층 판정 ${Object.keys(moves.stocks).length} · 기사 ${news.items.length} 검사`,
   );
