@@ -731,6 +731,8 @@ function ImportButton({
       <input
         ref={ref}
         type="file"
+        /* 눈에 안 보여도 이름은 있어야 합니다 — 화면 낭독기는 읽습니다 */
+        aria-label="백업 파일 고르기 (JSON)"
         accept="application/json"
         hidden
         onChange={async (e) => {

@@ -11,8 +11,17 @@
 
 import { readFile, readdir } from "node:fs/promises";
 import { THEMES } from "../src/data/themes";
+import { PERIPHERAL } from "../src/data/peripheral";
 
 const DIR = "src/data/generated";
+
+/** 중앙값 — 계산 쪽과 같은 방식(짝수면 가운데 둘의 평균) */
+function medianOf(xs: number[]): number | null {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
 const problems: string[] = [];
 const note = (s: string) => problems.push(s);
 
@@ -103,6 +112,28 @@ async function main() {
       for (const v of [L.verdict1, L.verdict5])
         if (v && !["layer", "solo", "mixed"].includes(v))
           note(`이상한 판정값: ${v}`);
+
+      /*
+       * 판정의 근거가 되는 **나머지 종목 중앙값**까지 다시 세어 봅니다.
+       * 위 검사들은 "모양" 만 봅니다 — 중앙값이 엉뚱해도 안 걸립니다.
+       */
+      const peers = layer.stocks
+        .map((s) => s.ticker.toUpperCase())
+        .filter((t) => t !== ticker);
+      if (L.peers !== peers.length)
+        note(`나머지 종목 수 ${L.peers} ≠ ${peers.length}: ${ticker} ${L.theme}${L.n}`);
+      for (const [key, got] of [
+        ["ret1", L.median1],
+        ["ret5", L.median5],
+      ] as const) {
+        if (got == null) continue;
+        const vals = peers
+          .map((t) => stocks.stocks[t]?.[key])
+          .filter((v): v is number => typeof v === "number");
+        const want = medianOf(vals);
+        if (want != null && Math.abs(want - got) > 0.02)
+          note(`${ticker} ${L.theme}${L.n} ${key} 중앙값 ${got} ≠ 다시 센 ${want.toFixed(2)}`);
+      }
     }
   }
 
@@ -143,13 +174,6 @@ async function main() {
     >;
   }>("layers.json");
 
-  const med = (xs: number[]): number | null => {
-    if (!xs.length) return null;
-    const s = [...xs].sort((a, b) => a - b);
-    const m = Math.floor(s.length / 2);
-    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-  };
-
   for (const t of THEMES) {
     const th = layersNum.themes?.[t.slug];
     if (!th) continue;
@@ -162,8 +186,8 @@ async function main() {
           .filter((v): v is number => typeof v === "number");
       const v20 = pick("ret20");
       const v5 = pick("ret5");
-      const m20 = med(v20);
-      const m5 = med(v5);
+      const m20 = medianOf(v20);
+      const m5 = medianOf(v5);
       // 반올림 자리 때문에 0.02 는 봐줍니다
       if (m20 != null && L.ret20 != null && Math.abs(m20 - L.ret20) > 0.02)
         note(`${t.slug} ${L.n}층 ret20 ${L.ret20} ≠ 다시 센 중앙값 ${m20.toFixed(2)}`);
@@ -176,30 +200,116 @@ async function main() {
     }
   }
 
-  /* ── 2-b-3. 동조율 숫자가 자기끼리 맞는가 ──────────────────── */
+  /* ── 2-b-3. 동조율 숫자가 자기끼리 맞는가 ────────────────────
+   *
+   * ⚠️ 이 검사는 처음에 **열쇠 이름을 틀려 아무것도 하지 않고 있었습니다.**
+   * `candidates` / `n` / `ratio` 로 읽었는데 실제 파일은 `members` / `events` /
+   * `rate` 입니다. `?? []` 때문에 조용히 빈 반복이 되어 늘 통과했습니다.
+   * 검사를 새로 넣으면 **일부러 틀린 값을 넣어 걸리는지** 확인할 것.
+   */
   const syncNum = await load<{
     themes: Record<
       string,
       {
         byLeader: Record<
           string,
-          { events: number; candidates: { ticker: string; hits: number; n: number; ratio: number }[] }
+          {
+            events: number;
+            members: { ticker: string; hits: number; events: number; rate: number | null }[];
+          }
         >;
       }
     >;
   }>("sync.json");
+  let syncRows = 0;
   for (const [slug, v] of Object.entries(syncNum.themes ?? {})) {
     for (const [leader, view] of Object.entries(v.byLeader ?? {})) {
-      for (const c of view.candidates ?? []) {
-        if (c.hits > c.n)
-          note(`${slug}/${leader} ${c.ticker}: 같이 오른 날 ${c.hits} > 표본 ${c.n}`);
-        if (c.n > view.events)
-          note(`${slug}/${leader} ${c.ticker}: 표본 ${c.n} > 사건 ${view.events}`);
-        const r = c.n ? (c.hits / c.n) * 100 : 0;
-        if (Math.abs(r - c.ratio) > 0.6)
-          note(`${slug}/${leader} ${c.ticker}: 비율 ${c.ratio} ≠ ${r.toFixed(1)}`);
+      if (!Array.isArray(view.members))
+        note(`${slug}/${leader}: members 가 없습니다 — 파일 모양이 바뀌었습니다`);
+      for (const c of view.members ?? []) {
+        syncRows++;
+        if (c.hits > c.events)
+          note(`${slug}/${leader} ${c.ticker}: 같이 오른 날 ${c.hits} > 표본 ${c.events}`);
+        if (c.events > view.events)
+          note(`${slug}/${leader} ${c.ticker}: 표본 ${c.events} > 사건 ${view.events}`);
+        if (c.rate != null && c.events > 0) {
+          const r = (c.hits / c.events) * 100;
+          if (Math.abs(r - c.rate) > 0.11)
+            note(`${slug}/${leader} ${c.ticker}: 비율 ${c.rate} ≠ ${r.toFixed(1)}`);
+        }
       }
     }
+  }
+  // 한 줄도 못 봤다면 그것 자체가 문제입니다 (위 사고의 재발 방지)
+  if (stockCount > 0 && syncRows === 0) note("동조율 검사가 한 줄도 보지 못했습니다");
+
+  /* ── 2-b-5. 브리핑이 층 온도와 같은 것을 가리키는가 ─────────── */
+  const briefNum = await load<{
+    themes: Record<
+      string,
+      {
+        hottest?: { n: number; ret20: number };
+        coldest?: { n: number; ret20: number };
+        riser?: { n: number; rank20: number; rank5: number; delta: number };
+      }
+    >;
+  }>("briefing.json");
+  for (const [slug, b] of Object.entries(briefNum.themes ?? {})) {
+    const ls = (layersNum.themes?.[slug]?.layers ?? []).filter((l) => l.ret20 != null);
+    if (!ls.length) continue;
+    const hot = ls.reduce((a, x) => ((x.ret20 as number) > (a.ret20 as number) ? x : a));
+    const cold = ls.reduce((a, x) => ((x.ret20 as number) < (a.ret20 as number) ? x : a));
+    if (b.hottest && b.hottest.n !== hot.n)
+      note(`${slug} 브리핑의 가장 뜨거운 층 ${b.hottest.n} ≠ 실제 ${hot.n}`);
+    if (b.coldest && b.coldest.n !== cold.n)
+      note(`${slug} 브리핑의 가장 식은 층 ${b.coldest.n} ≠ 실제 ${cold.n}`);
+    if (b.riser && b.riser.rank20 - b.riser.rank5 !== b.riser.delta)
+      note(`${slug} riser 의 오른 계단 ${b.riser.delta} 이 순위차와 안 맞음`);
+  }
+
+  /* ── 2-b-6. 순환 그림의 순위가 그 시점 성과의 줄 세우기인가 ─── */
+  const rotNum = await load<{
+    themes: Record<
+      string,
+      { dates: string[]; layers: { n: number; ranks: (number | null)[]; rets: (number | null)[] }[] }
+    >;
+  }>("rotation.json");
+  for (const [slug, r] of Object.entries(rotNum.themes ?? {})) {
+    for (let i = 0; i < (r.dates?.length ?? 0); i++) {
+      const pts = (r.layers ?? [])
+        .map((l) => ({ n: l.n, rank: l.ranks?.[i], ret: l.rets?.[i] }))
+        .filter((p): p is { n: number; rank: number; ret: number } => p.rank != null && p.ret != null);
+      if (pts.length < 2) continue;
+      const ranks = pts.map((p) => p.rank);
+      if (new Set(ranks).size !== ranks.length)
+        note(`${slug} ${r.dates[i]} 순위가 겹칩니다`);
+      const want = [...pts].sort((a, b) => b.ret - a.ret);
+      for (let k = 0; k < want.length; k++) {
+        const got = pts.find((p) => p.rank === k + 1);
+        if (!got) { note(`${slug} ${r.dates[i]} ${k + 1}위가 없습니다`); break; }
+        // 동점은 순서가 갈릴 수 있으니 값이 다를 때만 따집니다
+        if (got.ret !== want[k].ret) {
+          note(`${slug} ${r.dates[i]} ${k + 1}위 성과 ${got.ret} ≠ 줄 세운 값 ${want[k].ret}`);
+          break;
+        }
+      }
+    }
+  }
+
+  /* ── 2-b-7. 곁다리 목록이 아직 유효한가 ─────────────────────
+   *
+   * 사람이 손으로 적는 목록이라(`src/data/peripheral.ts`), 큐레이션에서
+   * 종목을 빼면 **조용히 아무 일도 안 하는 줄**이 남습니다.
+   */
+  for (const [slug, tickers] of Object.entries(PERIPHERAL)) {
+    const th = themeMap.get(slug);
+    if (!th) { note(`곁다리 목록에 없는 테마: ${slug}`); continue; }
+    const have = new Set(
+      th.layers.flatMap((l) => l.stocks.map((s) => s.ticker.toUpperCase())),
+    );
+    for (const t of tickers)
+      if (!have.has(t.toUpperCase()))
+        note(`곁다리 ${t} 가 ${slug} 테마에 없습니다 — 목록이 낡았습니다`);
   }
 
   /* ── 2-b-4. 대장주 순위가 점수 순인가 ──────────────────────── */

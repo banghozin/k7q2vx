@@ -192,8 +192,8 @@ export default function AboutPage() {
           <table>
             <thead>
               <tr>
-                <th style={{ width: "10rem" }}>항목</th>
-                <th>출처와 방식</th>
+                <th scope="col" style={{ width: "10rem" }}>항목</th>
+                <th scope="col">출처와 방식</th>
               </tr>
             </thead>
             <tbody>

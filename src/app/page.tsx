@@ -285,9 +285,9 @@ export default async function Home() {
             <table>
               <thead>
                 <tr>
-                  <th style={{ width: "6rem" }}>티커</th>
-                  <th style={{ width: "12rem" }}>회사</th>
-                  <th>걸쳐 있는 층</th>
+                  <th scope="col" style={{ width: "6rem" }}>티커</th>
+                  <th scope="col" style={{ width: "12rem" }}>회사</th>
+                  <th scope="col">걸쳐 있는 층</th>
                 </tr>
               </thead>
               <tbody>

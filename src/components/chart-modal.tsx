@@ -1,11 +1,32 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useChartModal } from "@/lib/store/chart-modal-store";
 import { useNotes } from "@/lib/store/notes-store";
 import { nameOf, placementsOf } from "@/data/themes";
-import { CandleChart, type Candle, type TradeMarker } from "./candle-chart";
+import type { Candle, TradeMarker } from "./candle-chart";
+
+/**
+ * 캔들 그림은 **열 때 받아 옵니다.**
+ *
+ * 이 모달은 `layout.tsx` 에 붙어 있어 모든 화면에 함께 실립니다. 그런데 캔들을
+ * 그리는 `lightweight-charts` 는 압축해도 81KB 라, 그냥 두면 **차트를 한 번도
+ * 열지 않는 화면**(읽는 법·뉴스 보관함·워치리스트·매매노트)까지 그걸 내려받게
+ * 됩니다. 2026-09-02 에 재어 보니 `/about` 이 250KB(brotli) 였고 그중 81KB 가
+ * 이것이었습니다.
+ *
+ * `ssr: false` 인 이유는 이 라이브러리가 브라우저의 `document` 를 곧바로
+ * 찾기 때문입니다. 서버에서 그릴 것도 없습니다.
+ */
+const CandleChart = dynamic(
+  () => import("./candle-chart").then((m) => m.CandleChart),
+  {
+    ssr: false,
+    loading: () => <div className="empty">차트를 준비하는 중입니다…</div>,
+  },
+);
 import { StarButton } from "./star-button";
 import { MoveVerdictBlock } from "./move-verdict";
 import { ArchivedNews } from "./archived-news";

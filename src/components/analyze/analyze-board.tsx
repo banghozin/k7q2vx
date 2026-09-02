@@ -709,6 +709,7 @@ export function AnalyzeBoard({
             <input
               className="anz__search"
               value={query}
+              aria-label="종목 찾기"
               placeholder="티커나 이름 (예: NVDA, 엔비디아)"
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -993,7 +994,12 @@ export function AnalyzeBoard({
           </p>
         </aside>
 
-        <main className="prac__chart">
+        {/*
+          `<main>` 은 한 화면에 하나여야 합니다. 바깥 배치(`layout.tsx`)가
+          이미 하나를 두고 있어 여기까지 `main` 으로 두면 둘이 됩니다 —
+          화면 낭독기에서 "본문" 이 두 개가 됩니다.
+        */}
+        <section className="prac__chart" aria-label="차트">
           {loading && <div className="prac__overlay">시세를 받는 중입니다…</div>}
           {error && (
             <div className="prac__overlay">
@@ -1015,7 +1021,7 @@ export function AnalyzeBoard({
             /* 끌어 옮긴 자리도 남겨야 합니다 — 없으면 다시 들어왔을 때 되돌아갑니다 */
             onMoveEnd={autoSave}
           />
-        </main>
+        </section>
       </div>
 
       <footer className="prac__foot">

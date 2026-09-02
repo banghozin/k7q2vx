@@ -952,7 +952,12 @@ export function PracticeBoard() {
           </p>
         </aside>
 
-        <main className="prac__chart">
+        {/*
+          `<main>` 은 한 화면에 하나여야 합니다. 바깥 배치(`layout.tsx`)가
+          이미 하나를 두고 있어 여기까지 `main` 으로 두면 둘이 됩니다 —
+          화면 낭독기에서 "본문" 이 두 개가 됩니다.
+        */}
+        <section className="prac__chart" aria-label="차트">
           {phase === "loading" && (
             <div className="prac__overlay">과거 차트를 뽑는 중입니다…</div>
           )}
@@ -976,7 +981,7 @@ export function PracticeBoard() {
             onMoveEnd={refreshDrawings}
           />
           {logOpen && <PracticeLog onClose={() => setLogOpen(false)} />}
-        </main>
+        </section>
       </div>
 
       <footer className="prac__foot">
