@@ -92,8 +92,20 @@ export async function GET(req: Request) {
     return Response.json({ error: "잘못된 구간" }, { status: 400 });
   }
 
+  /*
+   * ⚠️ 야후는 **점을 하이픈으로** 씁니다. 무그(Moog)의 A종 주식은 우리
+   * 큐레이션에 `MOG.A` 로 적혀 있는데, 야후에 그대로 물으면 404 입니다
+   * (`MOG-A` 는 200). 하루 1회 시세를 모으는 쪽(`scripts/lib/yahoo.ts`)에는
+   * 이 정규화가 처음부터 있었는데 **브라우저가 부르는 이 자리에는 빠져
+   * 있었습니다.** 그래서 층 지도에서 그 카드를 눌러도 차트가 안 열렸습니다.
+   *
+   * 지금 점이 든 티커는 이것 하나뿐이지만, 우선주·종류주는 앞으로도
+   * 들어올 수 있으므로 규칙으로 둡니다.
+   */
+  const yahooTicker = ticker.replace(/\./g, "-");
+
   const target = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
-    ticker,
+    yahooTicker,
   )}?interval=${interval}&range=${range}`;
 
   try {

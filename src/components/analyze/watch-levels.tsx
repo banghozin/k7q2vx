@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { nameOf } from "@/data/themes";
 import { recentSheets, useAnalysis } from "@/lib/store/analysis-store";
 import {
@@ -80,11 +80,9 @@ export function WatchLevels({ onPick }: { onPick: (ticker: string) => void }) {
   const tickerKey = targets.map((t) => t.ticker).join(",");
   const [tick, setTick] = useState(0); // 다 받으면 한 번 다시 그립니다
   const [busy, setBusy] = useState(false);
-  const seen = useRef("");
 
   useEffect(() => {
-    if (!tickerKey || seen.current === tickerKey) return;
-    seen.current = tickerKey;
+    if (!tickerKey) return;
 
     const tickers = tickerKey.split(",");
     if (tickers.every((t) => cache.has(t))) {
@@ -92,6 +90,19 @@ export function WatchLevels({ onPick }: { onPick: (ticker: string) => void }) {
       return;
     }
 
+    /*
+     * "이미 받은 목록" 을 따로 기억해 두지 않습니다.
+     *
+     * 처음에는 같은 목록으로 두 번 부르지 않으려고 ref 에 적어 뒀는데, 그게
+     * 개발 모드에서 **목록이 영영 안 뜨는** 원인이었습니다. React 는 개발
+     * 모드에서 효과를 일부러 두 번 돌립니다(붙임 → 떼기 → 붙임). 첫 번째가
+     * 떼어지면서 요청이 중단되는데, 중단된 것은 캐시에 남기지 않으므로
+     * 받은 것이 없습니다. 그런데 두 번째 차례에는 ref 가 이미 차 있어서
+     * 그냥 돌아섭니다 — 아무것도 안 받은 채로 "받는 중" 에 멈춥니다.
+     *
+     * 어차피 위 `cache` 가 이미 받은 것을 걸러 주므로 그 ref 는 하는 일이
+     * 없었습니다. 없애는 것이 곧 고치는 것입니다.
+     */
     const ac = new AbortController();
     let alive = true;
     setBusy(true);

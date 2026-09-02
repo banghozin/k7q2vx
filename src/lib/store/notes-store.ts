@@ -315,7 +315,17 @@ export type TradeMath = {
   cost: number | null;
   /** 목표가별 R 배수 */
   targetR: { price: number; portion: number; r: number }[];
-  /** 비중을 감안한 기대 손익비 (R) — 목표를 다 채웠을 때 */
+  /**
+   * 적어 넣은 목표들의 **비중 가중 평균** 손익비(R).
+   *
+   * 비중 합계로 나눕니다. 처음에는 그냥 100 으로 나눴는데, 그러면 목표를
+   * 하나만 적고 비중을 40% 로 둔 사람에게 **2R 짜리 목표가 0.8R 로**
+   * 나왔습니다. 나머지 60% 를 0원에 판다고 친 셈입니다. 게다가 그 값이
+   * "1R 미만" 경고를 깨워서 "벌 것보다 잃을 게 크다" 는 **틀린 말**을
+   * 띄웠습니다.
+   *
+   * 비중 합계가 100% 면 결과가 예전과 똑같습니다.
+   */
   blendedR: number | null;
   /** 목표 비중 합계 */
   portionSum: number;
@@ -356,9 +366,10 @@ export function computeTrade(
     }));
 
   const portionSum = targetR.reduce((a, b) => a + (b.portion || 0), 0);
+  // 100 이 아니라 실제 비중 합계로 나눕니다 — 위 설명 참고
   const blendedR =
     r && portionSum > 0
-      ? targetR.reduce((a, b) => a + b.r * (b.portion / 100), 0)
+      ? targetR.reduce((a, b) => a + b.r * b.portion, 0) / portionSum
       : null;
 
   let realized: TradeMath["realized"] = null;

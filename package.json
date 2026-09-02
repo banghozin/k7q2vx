@@ -8,7 +8,6 @@
     "prebuild": "tsx scripts/ensure-generated.ts",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
     "validate": "tsx scripts/validate-tickers.ts",
     "fetch": "tsx scripts/fetch-prices.ts",
     "compute": "tsx scripts/compute.ts",
@@ -24,7 +23,7 @@
   "dependencies": {
     "klinecharts": "10.0.2",
     "lightweight-charts": "5.2.1",
-    "next": "16.2.4",
+    "next": "^16.3.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "zustand": "5.0.15"
