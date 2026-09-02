@@ -36,10 +36,122 @@ function dateKey(t: number): string {
   return new Date(t * 1000).toISOString().slice(0, 10);
 }
 
-/** n거래일 전 대비 수익률(%). 데이터가 모자라거나 말이 안 되면 null. */
-function changeOver(bars: Bar[], n: number): number | null {
-  const i = bars.length - 1 - n;
-  if (i < 0) return null;
+/**
+ * 값이 이어지지 않는 자리를 찾습니다 — **마지막 단절 바로 뒤 봉의 번호**.
+ * 그보다 앞을 걸치는 계산은 믿을 수 없습니다. 단절이 없으면 0.
+ *
+ * 왜 필요한가 — 2026-08-26 노보닉스(NVX) 1:10 역분할
+ * ---------------------------------------------------
+ * 야후가 **분할을 옛 종가에 반영하지 않은 채** 내려준 적이 있습니다.
+ *
+ *     08-25  0.435
+ *     08-26 ~ 08-28  (거래정지, 빈 봉)
+ *     08-31  3.08     ← 하루 사이 +608%
+ *
+ * 실제로는 열 주가 한 주로 합쳐진 것이라 주가는 그대로인데, 숫자만 보면
+ * 폭등입니다. 5일·20일 등락률은 상한(150%·400%)에 걸려 걸러졌지만
+ * **60일 +345.59% 는 상한 아래라 그대로 남았습니다.** 52주 위치도 0.847
+ * (최고가 부근)로 나왔는데 실제로는 바닥 근처입니다.
+ *
+ * `ret60` 과 `pos52` 는 지금 어느 화면에도 그리지 않으므로 사람 눈에 띈 값은
+ * 아닙니다. 그래도 고칩니다 — 저장소가 공개이고, 나중에 화면에 올리는 순간
+ * 조용히 틀린 채로 나갈 값이기 때문입니다. `dollarVol` 은 동조율 기준 종목
+ * 후보를 고르는 데 실제로 쓰입니다.
+ *
+ * 그래서 양 끝만 보지 않고 **구간 안을 한 번 훑습니다.** 하루 사이에 값이
+ * **세 배 넘게 벌어지거나 3분의 1 밑으로 줄면** 가격의 잣대 자체가 바뀐
+ * 것으로 봅니다. 배수로 재는 이유는 정·역분할이 대칭이기 때문입니다 —
+ * 10:1 역분할은 10배, 1:10 분할은 0.1배로 나타납니다.
+ *
+ * **진짜 급등과 가르려고 3배로 잡았습니다.** 하루 상한(±80%)을 그대로 쓰면
+ * 리튬 아메리카스(LAC)가 걸립니다 — 2025-09-24 에 하루 +96% 였는데 그건
+ * 실제로 일어난 일이고 52주 범위도 그대로 유효합니다. 분할로 잣대가 바뀌는
+ * 경우는 보통 3배 이상입니다.
+ *
+ * 멀쩡한 것을 잡지는 않는지 재 봤습니다 — 큐레이션 188종목의 최근
+ * 60거래일 안에서 하루 ±80% 를 넘긴 것은 **이 분할 하나뿐**이었습니다.
+ * 같은 기간 다른 분할 넷(CRWD 4:1 · HON · KLAC 10:1 · POWL 3:1)은
+ * 수정 종가가 제대로 반영돼 있어 걸리지 않습니다.
+ */
+const SCALE_BREAK = 3;
+
+function safeFrom(bars: Bar[]): number {
+  let from = 0;
+  for (let i = 1; i < bars.length; i++) {
+    const prev = bars[i - 1].a;
+    const cur = bars[i].a;
+    if (!(prev > 0) || !(cur > 0)) {
+      from = i;
+      continue;
+    }
+    const ratio = cur / prev;
+    if (ratio >= SCALE_BREAK || ratio <= 1 / SCALE_BREAK) from = i;
+  }
+  return from;
+}
+
+/**
+ * 그 날짜이거나 그보다 앞선, 가장 가까운 봉의 번호. 없으면 -1.
+ * 봉은 시간순이므로 반씩 갈라 찾습니다.
+ */
+function indexOnOrBefore(bars: Bar[], date: string): number {
+  let lo = 0;
+  let hi = bars.length - 1;
+  let ans = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (dateKey(bars[mid].t) <= date) {
+      ans = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return ans;
+}
+
+/** 찾은 봉이 목표 날짜에서 이만큼 넘게 떨어져 있으면 그 구간은 안 씁니다 */
+const MAX_LAG_DAYS = 7;
+
+/**
+ * n거래일 전 대비 수익률(%). 데이터가 모자라거나 말이 안 되면 null.
+ *
+ * `from` 은 `safeFrom` 이 찾은 단절 자리입니다. 구간이 그 앞을 걸치면
+ * 계산하지 않습니다.
+ *
+ * `onDate` 를 주면 **봉을 세는 대신 그 날짜를 기준으로** 잽니다.
+ *
+ * 왜 날짜여야 하는가 — 2026-09-02 에 재어 본 것
+ * ----------------------------------------------
+ * 야후는 한참 지난 봉을 나중에 비우기도 합니다. 2026-08-28(금) 봉이 **190종목
+ * 중 130종목에서만 사라졌습니다.** 봉을 세어 20칸을 물러나면 그 130종목은
+ * 08-03 을, 나머지 60종목은 08-04 를 보게 됩니다. 즉 **같은 "20일 등락률" 이
+ * 종목마다 다른 기간**이 됩니다.
+ *
+ * 이 사이트가 하는 일이 층끼리 온도를 견주는 것이라, 잣대가 종목마다 다르면
+ * 중앙값도 순위도 뜻이 없어집니다. 실제로 AEIS 는 봉으로 세면 -21.76%,
+ * 날짜로 재면 -9.88% 였습니다(야후 원자료로 검산한 값은 -9.88%).
+ *
+ * 기준 달력은 **SPY** 를 씁니다 — 미국장 거래일 그 자체입니다.
+ */
+function changeOver(
+  bars: Bar[],
+  n: number,
+  from = 0,
+  onDate?: string | null,
+): number | null {
+  let i: number;
+  if (onDate) {
+    i = indexOnOrBefore(bars, onDate);
+    if (i < 0) return null;
+    // 오래 거래정지된 종목이 엉뚱하게 먼 봉과 견줘지지 않게
+    const lag =
+      (Date.parse(`${onDate}T00:00:00Z`) - bars[i].t * 1000) / 86_400_000;
+    if (lag > MAX_LAG_DAYS) return null;
+  } else {
+    i = bars.length - 1 - n;
+  }
+  if (i < 0 || i < from) return null;
   const past = bars[i].a;
   const now = bars[bars.length - 1].a;
   if (!(past > 0)) return null;
@@ -157,31 +269,55 @@ async function main() {
   /* ── 1. 종목별 지표 ─────────────────────────────────────────── */
 
   const spy = byTicker.get("SPY");
-  const spyRet20 = spy ? changeOver(spy, 20) : null;
+
+  /*
+   * 시장 달력 — 모든 종목이 **같은 날짜**를 기준으로 재도록 SPY 의 거래일을
+   * 씁니다. 봉을 세면 자료에 구멍이 있는 종목만 기간이 밀립니다
+   * (`changeOver` 머리말 참고).
+   */
+  const refDay = (n: number): string | null => {
+    if (!spy) return null;
+    const i = spy.length - 1 - n;
+    return i >= 0 ? dateKey(spy[i].t) : null;
+  };
+  const D1 = refDay(1);
+  const D5 = refDay(5);
+  const D20 = refDay(20);
+  const D60 = refDay(60);
+
+  const spyRet20 = spy ? changeOver(spy, 20, 0, D20) : null;
 
   const stocks: Record<string, StockMetrics> = {};
   for (const [t, bars] of byTicker) {
     const last = bars.at(-1)?.c ?? null;
-    const ret20 = changeOver(bars, 20);
+    // 단절(반영 안 된 분할 등) 뒤로만 믿습니다 — safeFrom 머리말 참고
+    const from = safeFrom(bars);
+    const ret20 = changeOver(bars, 20, from, D20);
 
-    const recent = bars.slice(-20);
+    /*
+     * 거래량 쪽도 단절을 건너뛰면 안 됩니다. 역분할이면 주식 수가 열 분의
+     * 일이 되므로 평균 거래량과 견주는 배수가 열 배로 부풀어 오릅니다.
+     */
+    const clean20 = from <= bars.length - 20;
+    const recent = clean20 ? bars.slice(-20) : [];
     const dv = recent.length
       ? mean(recent.map((b) => b.c * b.v).filter((x) => Number.isFinite(x)))
       : null;
     const avgVol = recent.length ? mean(recent.map((b) => b.v)) : null;
     const lastVol = bars.at(-1)?.v ?? 0;
 
-    const yr = bars.slice(-252).map((b) => b.a);
+    // 52주 안에 단절이 있으면 고가·저가가 서로 다른 잣대의 값이 됩니다
+    const yr = from <= bars.length - 252 ? bars.slice(-252).map((b) => b.a) : [];
     const hi = yr.length ? Math.max(...yr) : null;
     const lo = yr.length ? Math.min(...yr) : null;
     const cur = bars.at(-1)?.a ?? null;
 
     stocks[t] = {
       last: last != null ? round(last) : null,
-      ret1: changeOver(bars, 1),
-      ret5: changeOver(bars, 5),
+      ret1: changeOver(bars, 1, from, D1),
+      ret5: changeOver(bars, 5, from, D5),
       ret20,
-      ret60: changeOver(bars, 60),
+      ret60: changeOver(bars, 60, from, D60),
       rs20: ret20 != null && spyRet20 != null ? round(ret20 - spyRet20) : null,
       dollarVol: dv != null ? Math.round(dv) : null,
       volRatio:
@@ -580,7 +716,15 @@ async function main() {
         ret5: median(r5),
         ret20: median(r20),
         up: r20.filter((v) => v > 0).length,
-        total: ts.length,
+        /*
+         * **잰 종목 수**입니다. 층에 속한 종목 수가 아닙니다.
+         *
+         * 화면은 "1/2종목 상승" 처럼 씁니다. 예전에는 분모가 소속 종목 수라,
+         * 값을 못 구한 종목이 있으면 **내린 것처럼 읽혔습니다** — 전기차
+         * 2층이 실제로 그랬습니다(NVX 가 분할 때문에 값 없음).
+         * 잰 것만 세면 "1/1종목 상승" 이 되어 사실 그대로입니다.
+         */
+        total: r20.length,
         rank20: null as number | null,
         best: withR20[0]?.t ?? null,
         worst: withR20.at(-1)?.t ?? null,

@@ -53,13 +53,6 @@ jobs:
       - name: 지표 계산
         run: npm run compute
 
-      # 뉴스 피드는 최근 100건만 주는데 그게 7시간 반이면 다 찹니다.
-      # 오늘 안 모으면 오늘 기사는 영영 사라지므로 매일 쌓아 둡니다.
-      # 실패해도 시세 갱신 전체를 멈추지는 않습니다.
-      - name: 뉴스 보관
-        run: npm run news
-        continue-on-error: true
-
       # 계산 스크립트가 스스로 보는 것(NaN·Infinity)만으로는 안 잡히는 것들이
       # 있습니다 — 파일끼리 기준일이 어긋나거나, 없는 층에 판정이 붙거나,
       # 아카이브에 이상한 링크가 들어오는 경우입니다. 조용히 틀린 숫자를
@@ -87,6 +80,42 @@ jobs:
             git pull --rebase origin main || exit 1
           done
           echo "5번 시도했지만 push 하지 못했습니다"
+          exit 1
+
+      # ── 뉴스는 **시세를 올린 뒤** 모읍니다 ────────────────────────────
+      #
+      # 예전에는 계산 다음, 무결성 검사 앞에서 모았습니다. 그러면 2026-09-01
+      # 에 뉴스 수집 쪽에서 났던 사고가 여기서 그대로 재연됩니다 —
+      # **기사 한 건의 흠 때문에 그날 모은 기사가 통째로 버려집니다.**
+      # 공개 피드는 몇 시간치만 주므로 되찾을 수 없습니다.
+      #
+      # 순서를 바꾸면 둘이 서로를 못 죽입니다. 시세는 검사를 통과해야만
+      # 올라가고(틀린 숫자를 배포하지 않기 위해), 기사는 시세와 무관하게
+      # 따로 올라갑니다. 검사에서 걸려 여기까지 못 오더라도 다음 뉴스 수집
+      # (UTC 02:11, 3시간 54분 뒤)이 피드 창(7.6시간) 안에 들어옵니다.
+      - name: 뉴스 보관
+        run: npm run news
+        continue-on-error: true
+
+      # 모으는 것은 남의 서버 사정으로 실패할 수 있어 넘어가지만(위),
+      # **모아 놓고 못 올리는 것**은 그대로 사라지는 것이라 알려야 합니다.
+      - name: 모은 기사 커밋
+        run: |
+          git add src/data/generated/news/
+          if git diff --staged --quiet; then
+            echo "새 기사가 없습니다."
+            exit 0
+          fi
+          git commit -m "chore(news): 기사 수집 $(date -u +'%Y-%m-%d %H:%M')"
+          for attempt in 1 2 3 4 5; do
+            if git pull --rebase --autostash origin main && git push origin HEAD:main; then
+              echo "push 성공 (${attempt}번째 시도)"
+              exit 0
+            fi
+            echo "재시도 $attempt"
+            sleep 5
+          done
+          echo "기사 push 에 실패했습니다"
           exit 1
 
       # 실패할 때마다 새 이슈를 만들면 알림이 쌓여 아무도 안 보게 됩니다.

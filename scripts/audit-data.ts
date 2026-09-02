@@ -33,7 +33,7 @@ type MoveLayer = {
 async function main() {
   const stocks = await load<{
     asOf: string;
-    stocks: Record<string, { ret1: number | null; ret5: number | null }>;
+    stocks: Record<string, { ret1: number | null; ret5: number | null; ret20: number | null }>;
   }>("stocks.json");
   const moves = await load<{
     asOf: string;
@@ -119,6 +119,98 @@ async function main() {
     const r = (t.ranked ?? []).map((x) => x.ticker);
     const dup = [...new Set(r.filter((x, i) => r.indexOf(x) !== i))];
     if (dup.length) note(`${slug} 대장주 순위에 중복: ${dup.join(",")}`);
+  }
+
+  /* ── 2-b-2. 파일끼리 숫자가 맞물리는가 ──────────────────────
+   *
+   * 여기까지의 검사는 "모양" 을 봅니다. 값이 서로 어긋나는 것은 못 잡습니다.
+   * 2026-09-02 에 실제로 전기차 2층이 **"1/2종목 상승"** 이라고 적고 있었는데,
+   * 둘 중 하나는 값을 못 구한 종목이라 내린 것처럼 읽혔습니다. 층 온도는
+   * 이 사이트가 층끼리 견주는 근거이므로 다시 세어 맞춰 봅니다.
+   */
+  const layersNum = await load<{
+    themes: Record<
+      string,
+      {
+        layers: {
+          n: number;
+          ret5: number | null;
+          ret20: number | null;
+          up: number;
+          total: number;
+        }[];
+      }
+    >;
+  }>("layers.json");
+
+  const med = (xs: number[]): number | null => {
+    if (!xs.length) return null;
+    const s = [...xs].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  };
+
+  for (const t of THEMES) {
+    const th = layersNum.themes?.[t.slug];
+    if (!th) continue;
+    for (const L of th.layers) {
+      const def = t.layers.find((x) => x.n === L.n);
+      if (!def) continue;
+      const pick = (k: "ret5" | "ret20") =>
+        def.stocks
+          .map((s) => stocks.stocks[s.ticker]?.[k])
+          .filter((v): v is number => typeof v === "number");
+      const v20 = pick("ret20");
+      const v5 = pick("ret5");
+      const m20 = med(v20);
+      const m5 = med(v5);
+      // 반올림 자리 때문에 0.02 는 봐줍니다
+      if (m20 != null && L.ret20 != null && Math.abs(m20 - L.ret20) > 0.02)
+        note(`${t.slug} ${L.n}층 ret20 ${L.ret20} ≠ 다시 센 중앙값 ${m20.toFixed(2)}`);
+      if (m5 != null && L.ret5 != null && Math.abs(m5 - L.ret5) > 0.02)
+        note(`${t.slug} ${L.n}층 ret5 ${L.ret5} ≠ 다시 센 중앙값 ${m5.toFixed(2)}`);
+      if (L.total !== v20.length)
+        note(`${t.slug} ${L.n}층 분모 ${L.total} ≠ 값이 있는 종목 수 ${v20.length}`);
+      if (L.up !== v20.filter((v) => v > 0).length)
+        note(`${t.slug} ${L.n}층 상승 ${L.up} ≠ 다시 센 ${v20.filter((v) => v > 0).length}`);
+    }
+  }
+
+  /* ── 2-b-3. 동조율 숫자가 자기끼리 맞는가 ──────────────────── */
+  const syncNum = await load<{
+    themes: Record<
+      string,
+      {
+        byLeader: Record<
+          string,
+          { events: number; candidates: { ticker: string; hits: number; n: number; ratio: number }[] }
+        >;
+      }
+    >;
+  }>("sync.json");
+  for (const [slug, v] of Object.entries(syncNum.themes ?? {})) {
+    for (const [leader, view] of Object.entries(v.byLeader ?? {})) {
+      for (const c of view.candidates ?? []) {
+        if (c.hits > c.n)
+          note(`${slug}/${leader} ${c.ticker}: 같이 오른 날 ${c.hits} > 표본 ${c.n}`);
+        if (c.n > view.events)
+          note(`${slug}/${leader} ${c.ticker}: 표본 ${c.n} > 사건 ${view.events}`);
+        const r = c.n ? (c.hits / c.n) * 100 : 0;
+        if (Math.abs(r - c.ratio) > 0.6)
+          note(`${slug}/${leader} ${c.ticker}: 비율 ${c.ratio} ≠ ${r.toFixed(1)}`);
+      }
+    }
+  }
+
+  /* ── 2-b-4. 대장주 순위가 점수 순인가 ──────────────────────── */
+  const leadersNum = await load<{
+    themes: Record<string, { ranked: { ticker: string; score: number }[] }>;
+  }>("leaders.json");
+  for (const [slug, v] of Object.entries(leadersNum.themes ?? {})) {
+    const r = v.ranked ?? [];
+    for (let i = 1; i < r.length; i++)
+      if (r[i].score > r[i - 1].score + 1e-9)
+        note(`${slug} 순위가 점수 순이 아님: ${r[i].ticker}(${r[i].score}) > ${r[i - 1].ticker}(${r[i - 1].score})`);
   }
 
   /* ── 2-c. 큐레이션 데이터 자체 ─────────────────────────────── */
