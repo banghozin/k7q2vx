@@ -13,6 +13,7 @@ import { HandIcon } from "@/components/practice/hand-icon";
 import { ToolButton } from "@/components/practice/tool-button";
 import { INDICATOR_ICONS, TOOL_ICONS } from "@/components/practice/tool-icons";
 import { PenPicker } from "@/components/practice/pen-picker";
+import { WatchLevels } from "@/components/analyze/watch-levels";
 import { recentSheets, sheetKey, useAnalysis } from "@/lib/store/analysis-store";
 import { useChartPrefs } from "@/lib/store/chart-prefs-store";
 import { useNotes } from "@/lib/store/notes-store";
@@ -940,6 +941,17 @@ export function AnalyzeBoard({
               </ul>
             </section>
           )}
+
+          {/*
+            그어 둔 수평선이 닿았는지 되짚어 줍니다. 종목마다 다시 열어 보지
+            않아도 되게 하려는 자리입니다 — 자세한 것은 그 파일 머리말에.
+          */}
+          <WatchLevels
+            onPick={(t) => {
+              setTicker(t);
+              setPanelOpen(false);
+            }}
+          />
 
           <p className="prac__note">
             여기 그린 것은 <strong>내가 적어 둔 생각</strong>이지 이 사이트의

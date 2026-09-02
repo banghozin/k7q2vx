@@ -1966,6 +1966,90 @@ tbody tr:hover {
   color: var(--brass);
 }
 
+/* 그어 둔 자리 — 수평선이 닿았는지 되짚어 주는 목록 */
+.lvl {
+  list-style: none;
+  margin: 0.4rem 0 0.5rem;
+  padding: 0;
+}
+
+.lvl__lead {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  color: var(--ink-2);
+}
+
+.lvl > li > button {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.1rem 0.5rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.4rem 0.4rem;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--rule-soft);
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: 0.76rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lvl > li > button:hover {
+  background: var(--panel);
+  color: var(--ink);
+}
+
+/*
+ * 닿은 줄은 왼쪽 결로 표시합니다. 색만으로 알리지 않도록 줄 안에도
+ * "며칠 전 닿음" 이 그대로 적혀 있습니다.
+ *
+ * 상승 빨강을 쓰지 않습니다 — 이 표시는 "눈여겨볼 것" 이지 "올랐다" 가
+ * 아닌데, 한국 관행에서 빨강은 상승으로 읽힙니다. 사이트의 강조색인
+ * 놋쇠빛을 씁니다.
+ */
+.lvl > li.is-hit > button {
+  border-left: 2px solid var(--brass);
+  padding-left: 0.35rem;
+}
+
+.lvl__n,
+.lvl__s.is-hit {
+  color: var(--brass);
+}
+
+.lvl__who {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.lvl__who .mono {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.lvl__kr {
+  overflow: hidden;
+  color: var(--ink-4);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lvl__v {
+  color: var(--ink);
+  text-align: right;
+}
+
+.lvl__s {
+  grid-column: 1 / -1;
+  color: var(--ink-4);
+  font-size: 0.7rem;
+}
+
 .anz__tonotes {
   margin-top: 0.5rem;
   width: 100%;
