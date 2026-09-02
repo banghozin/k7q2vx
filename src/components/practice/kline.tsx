@@ -380,6 +380,30 @@ export function Kline({
        * 끝나기 전에 차트가 크기를 재서 생긴 문제라, 배치가 끝난 뒤 한 번 더
        * 재게 합니다. 창 크기가 바뀔 때도 같이 다시 잽니다.
        */
+      /*
+       * klinecharts 가 차트 판에 `tabindex="1"` 을 답니다.
+       *
+       * **0 보다 큰 tabindex 는 탭 순서를 통째로 가로챕니다.** 그 요소가
+       * 문서 어디에 있든 맨 앞으로 튀어나옵니다. 그래서 `/analyze` 와
+       * `/practice` 에서 탭을 처음 누르면 "본문으로 건너뛰기" 가 아니라
+       * **테두리도 안 보이는 차트 판**으로 갔습니다(`outline: none`).
+       * 키보드로 쓰는 사람 눈에는 아무 일도 안 일어난 것처럼 보입니다.
+       *
+       * 우리 단축키(Ctrl+Z·Delete)는 창 전체에 걸어 두었으므로 이 판이
+       * 포커스를 받을 필요가 없습니다. 탭 고리에서 빼되(-1) 눌러서 잡는 것은
+       * 그대로 둡니다.
+       */
+      const dropTabStop = () => {
+        // 우리가 만든 껍데기가 아니라 **klinecharts 가 안에 만든 판**입니다
+        for (const el of boxRef.current?.querySelectorAll("[tabindex]") ?? []) {
+          if (Number(el.getAttribute("tabindex")) > 0)
+            el.setAttribute("tabindex", "-1");
+        }
+      };
+      dropTabStop();
+      // 판을 다시 만드는 경우가 있어 한 번 더
+      setTimeout(dropTabStop, 300);
+
       const remeasure = () => chartRef.current?.resize();
       requestAnimationFrame(remeasure);
       setTimeout(remeasure, 250);
