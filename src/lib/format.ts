@@ -39,9 +39,22 @@ export function josa(word: string, pair: string): string {
     return (code - 0xac00) % 28 === 0 ? withoutBatchim : withBatchim;
   }
 
-  // 영문·숫자로 끝나는 경우 — 소리 나는 대로 읽었을 때의 받침으로 판단
+  /*
+   * 영문·숫자로 끝나는 경우 — 소리 나는 대로 읽었을 때의 받침으로 판단.
+   *
+   * 받침이 있는 글자: 엘(ㄹ) 엠(ㅁ) 엔(ㄴ) **알(ㄹ)** 과
+   * 영(ㅇ) 일(ㄹ) 삼(ㅁ) 육(ㄱ) 칠(ㄹ) 팔(ㄹ).
+   *
+   * `r` 이 빠져 있어서 동조율 화면이 **"MSTR가 크게 오른 날"** 이라고
+   * 적었습니다(맞는 말은 "MSTR이"). 기준 종목으로 고를 수 있는 것 중
+   * TER·PLTR·MSTR 셋이 걸렸습니다.
+   *
+   * 티커를 낱자로 읽는다고 보고 정합니다. UBER 처럼 낱말로 읽는 것(우버 →
+   * "우버가")은 어긋나지만, 낱자로 읽는 티커가 훨씬 많고 지금 조사를 붙이는
+   * 자리(동조율 기준 종목)에는 그런 티커가 없습니다.
+   */
   const lower = ch.toLowerCase();
-  const endsWithBatchim = "lmn013678".includes(lower); // 엘·엠·엔·영·일·삼·육·칠·팔
+  const endsWithBatchim = "lmnr013678".includes(lower);
   if (/[a-z0-9]/.test(lower)) {
     return endsWithBatchim ? withBatchim : withoutBatchim;
   }

@@ -59,7 +59,20 @@ export type KlineHandle = {
   /** 내가 그은 수평선들의 가격 — 실제가 그 자리를 건드렸는지 대조할 때 씁니다 */
   horizontalLevels: () => number[];
   /** 지금 그려져 있는 것들의 목록 (개별로 지우기 위해) */
-  listDrawings: () => { id: string; name: string }[];
+  /**
+   * 지금 그려져 있는 것들 — id 와 함께 **무엇으로 그렸는지**까지.
+   *
+   * 색·굵기·좌표가 같이 나오는 이유는, 자동으로 그어 주는 것(고저점·피보나치)이
+   * **새로고침 뒤에도 자기가 그은 것을 알아볼 수 있어야** 하기 때문입니다.
+   * id 만으로는 화면을 새로 여는 순간 연결이 끊깁니다.
+   */
+  listDrawings: () => {
+    id: string;
+    name: string;
+    color: string;
+    size: number;
+    points: { timestamp?: number; value?: number }[];
+  }[];
   /** 하나만 지웁니다 */
   removeDrawing: (id: string) => void;
   /**
@@ -536,10 +549,21 @@ export function Kline({
         .filter((v): v is number => typeof v === "number");
     },
     listDrawings() {
-      return (chartRef.current?.getOverlays() ?? []).map((o) => ({
-        id: o.id,
-        name: o.name,
-      }));
+      return (chartRef.current?.getOverlays() ?? []).map((o) => {
+        const line = (
+          o.styles as { line?: { color?: string; size?: number } } | undefined
+        )?.line;
+        return {
+          id: o.id,
+          name: o.name,
+          color: line?.color ?? "#c8a15a",
+          size: line?.size ?? 2,
+          points: (o.points ?? []).map((p) => ({
+            timestamp: p.timestamp,
+            value: p.value,
+          })),
+        };
+      });
     },
     removeDrawing(id) {
       chartRef.current?.removeOverlay({ id });

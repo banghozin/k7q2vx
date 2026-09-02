@@ -453,7 +453,22 @@ export function AnalyzeBoard({
     const pts = swingInfo.swings.slice(-(MAX_LEGS + 1));
     if (pts.length < 2) return;
 
-    for (const id of swingIdsRef.current) chart.current?.removeDrawing(id);
+    /*
+     * **id 만 기억해 두면 새로고침을 견디지 못합니다.**
+     *
+     * 이 ref 는 화면을 새로 열면 비고, 저장해 둔 선들은 새 id 로 다시
+     * 그려집니다. 그래서 다시 들어와 이 단추를 누르면 앞엣것이 안 지워지고
+     * 그대로 겹쳐 쌓였습니다 — 실제로 재 보니 16개가 32개가 됐습니다.
+     *
+     * 그래서 id 가 아니라 **생김새로 알아봅니다.** 이 단추가 긋는 선은
+     * 회색(SWING_COLOR) 1.2px 짜리 추세선인데, 굵기 1.2 는 펜에서 고를 수
+     * 없는 값(1·2·3.5·5)이라 손으로는 만들 수 없습니다.
+     */
+    for (const d of chart.current?.listDrawings() ?? []) {
+      if (d.name === "segment" && d.color === SWING_COLOR && d.size === 1.2) {
+        chart.current?.removeDrawing(d.id);
+      }
+    }
     swingIdsRef.current = [];
 
     const legs: SavedDrawing[] = [];
@@ -488,6 +503,25 @@ export function AnalyzeBoard({
     if (fibRef.current?.sig === sig) {
       chart.current?.removeDrawing(fibRef.current.id);
       fibRef.current = null;
+    }
+
+    /*
+     * 새로고침을 건너와도 같은 자리에 두 겹으로 쌓이지 않게, **좌표가 똑같은
+     * 피보나치**는 먼저 걷어냅니다. 위 `fibRef` 는 id 라 화면을 새로 열면
+     * 끊깁니다 (고저점 쪽과 같은 이유).
+     */
+    const same = (v: number | undefined, w: number) =>
+      v != null && Math.abs(v - w) < 1e-6;
+    for (const d of chart.current?.listDrawings() ?? []) {
+      if (d.name !== "fibRetracement" || d.points.length < 2) continue;
+      if (
+        same(d.points[0].timestamp, leg[0].time * 1000) &&
+        same(d.points[0].value, leg[0].price) &&
+        same(d.points[1].timestamp, leg[1].time * 1000) &&
+        same(d.points[1].value, leg[1].price)
+      ) {
+        chart.current?.removeDrawing(d.id);
+      }
     }
     const ids = chart.current?.importDrawings([
       {
