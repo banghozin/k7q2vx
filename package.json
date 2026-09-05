@@ -19,7 +19,8 @@
     "test:format": "tsx scripts/test-format.ts",
     "test:levels": "tsx scripts/test-levels.ts",
     "update": "npm run fetch && npm run compute && npm run news",
-    "clean-news": "tsx scripts/clean-news.ts"
+    "clean-news": "tsx scripts/clean-news.ts",
+    "namuh": "tsx scripts/check-namuh.ts"
   },
   "dependencies": {
     "klinecharts": "10.0.2",
