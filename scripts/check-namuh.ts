@@ -263,8 +263,44 @@ async function main() {
     );
   }
 
+  await writeSearchList(us);
+
   if (bad) process.exit(1);
   console.log(`\n[namuh] 전부 통과.`);
+}
+
+/**
+ * 검색용 목록을 뽑아 둡니다 → `src/data/generated/namuh-us.json`
+ *
+ * 화면의 "종목 찾기" 는 큐레이션한 186종목만 훑고 있었습니다. 그래서 나무에
+ * 멀쩡히 있는 종목(메가 포춘·멀린 등)을 쳐도 아무것도 안 떴습니다. 층에
+ * 세우는 것은 큐레이션이 하는 일이지만, **차트를 열어 보는 것까지 막을
+ * 이유는 없습니다.**
+ *
+ * 개별 회사(보통주·예탁증서)만 담습니다. ETF·ETN·우선주·SPAC 유닛·
+ * 신주인수권은 뺍니다 — 5,600개가 15,000개가 되면 검색이 쓰레기가 됩니다.
+ *
+ * 영문명은 넣지 않습니다. 한글명과 티커로 덮이는 데다, 넣으면 파일이 두 배
+ * (51KB → 87KB, 압축 후)가 됩니다. 이 파일은 **검색창에 첫 글자를 칠 때**
+ * 받아오므로 페이지 용량에는 영향이 없습니다.
+ */
+async function writeSearchList(us: Record_[]) {
+  const list = us
+    .filter((r) => ALLOWED_ISSUES.has(r.issue) && r.symbol && r.korName)
+    .map((r) => [r.symbol, r.korName] as const)
+    .sort((a, b) => a[0].localeCompare(b[0]));
+
+  const out = {
+    generatedAt: new Date().toISOString(),
+    source: "NH투자증권 해외주식 종목마스터 (m_gtsstock.mst)",
+    note: "보통주·예탁증서만. 층 배치가 아니라 검색·차트 열람용입니다.",
+    count: list.length,
+    stocks: list,
+  };
+
+  const path = "src/data/generated/namuh-us.json";
+  await writeFile(path, JSON.stringify(out) + "\n");
+  console.log(`[namuh] 검색 목록 ${list.length}종목 → ${path}`);
 }
 
 /**

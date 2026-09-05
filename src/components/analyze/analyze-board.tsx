@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KLineData, Period } from "klinecharts";
 import { allTickers, nameOf } from "@/data/themes";
+import { type Hit, type Row, loadNamuhList, searchNamuh } from "@/lib/namuh-search";
 import {
   Kline,
   type KlineHandle,
@@ -177,6 +178,22 @@ export function AnalyzeBoard({
   const rememberInd = useChartPrefs((s) => s.setIndicators);
   const [activeInd, setActiveInd] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
+
+  /*
+   * 나무 취급 종목 목록(5,599개). 검색창에 첫 글자를 칠 때 받아옵니다.
+   * 페이지에 같이 실으면 검색을 안 쓰는 사람에게도 190KB 가 실려 갑니다.
+   */
+  const [namuhRows, setNamuhRows] = useState<readonly Row[]>([]);
+  useEffect(() => {
+    if (query.trim().length === 0 || namuhRows.length > 0) return;
+    let alive = true;
+    loadNamuhList().then((rows) => {
+      if (alive) setNamuhRows(rows);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [query, namuhRows.length]);
 
   /*
    * 저장해 둔 펜을 되살립니다.
@@ -585,15 +602,21 @@ export function AnalyzeBoard({
   );
 
   /* ── 종목 찾기 ───────────────────────────────────────────────── */
-  const hits = useMemo(() => {
-    const q = query.trim().toUpperCase();
-    if (q.length === 0) return [];
-    return allTickers()
-      .filter(
-        (t) => t.includes(q) || (nameOf(t) ?? "").toUpperCase().includes(q),
-      )
-      .slice(0, 8);
-  }, [query]);
+  /*
+   * 층에 세운 186종목을 먼저 찾고, 자리가 남으면 나무 취급 종목으로 채웁니다.
+   * 예전에는 앞의 것만 훑어서, 나무에 멀쩡히 있는 종목(메가 포춘·멀린 등)을
+   * 쳐도 아무것도 안 떴습니다.
+   */
+  const hits = useMemo<Hit[]>(() => {
+    const raw = query.trim();
+    if (raw.length === 0) return [];
+    const q = raw.toUpperCase();
+    const curated: Hit[] = allTickers()
+      .filter((t) => t.includes(q) || (nameOf(t) ?? "").toUpperCase().includes(q))
+      .slice(0, 8)
+      .map((t) => ({ ticker: t, name: nameOf(t) ?? "", curated: true }));
+    return searchNamuh(namuhRows, raw, curated, 8);
+  }, [query, namuhRows]);
 
   const saved = hydrated ? recentSheets(sheets) : [];
   const last = bars.at(-1);
@@ -715,18 +738,18 @@ export function AnalyzeBoard({
             />
             {hits.length > 0 && (
               <ul className="anz__hits">
-                {hits.map((t) => (
-                  <li key={t}>
+                {hits.map((h) => (
+                  <li key={h.ticker}>
                     <button
                       type="button"
                       onClick={() => {
-                        setTicker(t);
+                        setTicker(h.ticker);
                         setQuery("");
                         setPanelOpen(false);
                       }}
                     >
-                      <span className="mono">{t}</span>
-                      <span>{nameOf(t)}</span>
+                      <span className="mono">{h.ticker}</span>
+                      <span>{h.name}</span>
                     </button>
                   </li>
                 ))}
