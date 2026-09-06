@@ -177,7 +177,25 @@ function curatedNames(): Map<string, string> {
 }
 
 async function main() {
-  const buf = await loadMaster();
+  let buf: Buffer;
+  try {
+    buf = await loadMaster();
+  } catch (e) {
+    /*
+     * 자료를 못 받은 것은 **우리 데이터의 문제가 아닙니다.** 남의 서버 사정이고,
+     * 이건 문서화된 API 가 아니라 그쪽 웹서버에 올라와 있는 파일이라 언제든
+     * 자리가 바뀔 수 있습니다. 그것 때문에 밤 갱신 전체가 멈추면 안 됩니다.
+     *
+     * 종목이 실제로 어긋난 경우(아래)와는 다르게 다룹니다 — 그건 막습니다.
+     */
+    console.warn(`\n[namuh] ⚠ 종목마스터를 못 받아 검사를 건너뜁니다 — ${(e as Error).message}`);
+    console.warn(
+      `[namuh]   자리가 바뀌었을 수 있습니다: ${MASTER_URL}\n` +
+        `[namuh]   갱신은 그대로 진행합니다.`,
+    );
+    return;
+  }
+
   const rows = parse(buf);
 
   const us = rows.filter((r) => r.nation === "USA");
@@ -290,6 +308,25 @@ async function writeSearchList(us: Record_[]) {
     .map((r) => [r.symbol, r.korName] as const)
     .sort((a, b) => a[0].localeCompare(b[0]));
 
+  const path = "src/data/generated/namuh-us.json";
+
+  /*
+   * 목록이 그대로면 파일을 건드리지 않습니다.
+   *
+   * 이 검사가 밤마다 돌기 때문에, 만든 시각만 바뀌어도 **190KB 짜리 파일이
+   * 매일 새로 커밋됩니다.** 종목이 실제로 늘거나 줄었을 때만 씁니다.
+   */
+  const next = JSON.stringify(list);
+  try {
+    const prev = JSON.parse(await readFile(path, "utf8")) as { stocks?: unknown };
+    if (JSON.stringify(prev.stocks ?? null) === next) {
+      console.log(`[namuh] 검색 목록 ${list.length}종목 — 그대로라 다시 쓰지 않습니다`);
+      return;
+    }
+  } catch {
+    // 파일이 없거나 깨졌으면 새로 씁니다
+  }
+
   const out = {
     generatedAt: new Date().toISOString(),
     source: "NH투자증권 해외주식 종목마스터 (m_gtsstock.mst)",
@@ -298,9 +335,8 @@ async function writeSearchList(us: Record_[]) {
     stocks: list,
   };
 
-  const path = "src/data/generated/namuh-us.json";
   await writeFile(path, JSON.stringify(out) + "\n");
-  console.log(`[namuh] 검색 목록 ${list.length}종목 → ${path}`);
+  console.log(`[namuh] 검색 목록 ${list.length}종목 → ${path} (바뀌어서 새로 씀)`);
 }
 
 /**
