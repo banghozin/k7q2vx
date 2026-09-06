@@ -1948,6 +1948,24 @@ tbody tr:hover {
   font-weight: 600;
 }
 
+/*
+ * 개별 회사가 아닌 것(ETF·우선주·SPAC 등)에 붙는 꼬리표.
+ *
+ * 나무에 있는 미국 종목 12,701개 중 7,102개가 여기 해당합니다. 회사인 줄
+ * 알고 골랐다가 ETF 인 것을 나중에 아는 일이 없게 이름 옆에 밝힙니다.
+ * 이름을 읽는 데 방해가 되면 안 되므로 작고 흐리게 둡니다.
+ */
+.anz__hitkind {
+  margin-left: 0.3rem;
+  padding: 0.05rem 0.25rem;
+  border: 1px solid var(--rule-soft);
+  border-radius: 2px;
+  color: var(--ink-3);
+  font-size: 0.62rem;
+  font-style: normal;
+  white-space: nowrap;
+}
+
 .anz__x {
   background: none;
   border: none;

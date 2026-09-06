@@ -749,7 +749,11 @@ export function AnalyzeBoard({
                       }}
                     >
                       <span className="mono">{h.ticker}</span>
-                      <span>{h.name}</span>
+                      <span>
+                        {h.name}
+                        {/* 개별 회사가 아니면 무엇인지 밝힙니다 — 골라 놓고 회사인 줄 알면 곤란합니다 */}
+                        {h.kind && <em className="anz__hitkind">{h.kind}</em>}
+                      </span>
                     </button>
                   </li>
                 ))}

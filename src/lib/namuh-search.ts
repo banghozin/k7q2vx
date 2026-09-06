@@ -17,6 +17,11 @@ export type Hit = {
   name: string;
   /** 우리가 층에 세운 종목인가 — 검색 결과에서 위로 올립니다 */
   curated: boolean;
+  /**
+   * 개별 회사가 아닌 경우의 종류 ("ETF" · "우선주" · "SPAC" 등).
+   * **없으면 개별 회사**입니다.
+   */
+  kind?: string;
 };
 
 /**
@@ -85,27 +90,47 @@ export function searchNamuh(
   const seen = new Set(curatedHits.map((h) => h.ticker));
 
   /*
-   * 티커가 그 글자로 **시작하는** 것을 먼저 봅니다. "MU" 를 쳤을 때 이름 안에
-   * MU 가 들어간 종목 여덟 개가 먼저 나오고 정작 마이크론이 안 보이면
-   * 검색이 아니라 방해입니다.
+   * 네 칸으로 나눠 담고 이 순서로 붙입니다.
+   *
+   *   ① 개별 회사 · 티커가 그 글자로 시작
+   *   ② 개별 회사 · 그 밖에 걸림
+   *   ③ ETF·우선주 등 · 티커가 그 글자로 시작
+   *   ④ ETF·우선주 등 · 그 밖에 걸림
+   *
+   * 두 가지를 동시에 지키기 위해서입니다.
+   *
+   * **개별 회사가 먼저.** 나무에 있는 12,701개 중 ETF·우선주·SPAC 이 7,102개라
+   * 절반이 넘습니다. 섞으면 찾던 회사가 ETF 더미에 묻힙니다.
+   *
+   * **티커로 시작하는 것이 먼저.** "MU" 를 쳤을 때 이름 안에 MU 가 든 종목이
+   * 여덟 개 먼저 나오고 정작 마이크론이 안 보이면 검색이 아니라 방해입니다.
    */
-  const starts: Hit[] = [];
-  const contains: Hit[] = [];
+  const bins: Hit[][] = [[], [], [], []];
 
   for (const row of rows) {
     const ticker = row[0];
     const name = row[1] ?? "";
     if (!ticker || seen.has(ticker)) continue;
+
+    /*
+     * **세 번째 칸이 있으면 개별 회사가 아닙니다.** 그 값은 화면에 보일 꼬리표인데,
+     * 이름에 이미 "ETF" 가 들어 있는 경우엔 빈 문자열입니다 — 겹쳐 보이지 않게.
+     * 그러니 "있는가" 와 "무엇을 보일까" 를 따로 봐야 합니다.
+     */
+    const isFund = row.length > 2;
+    const kind = row[2] || undefined;
+
     const t = ticker.toUpperCase();
-    if (t.startsWith(q)) {
-      starts.push({ ticker, name, curated: false });
-      if (starts.length >= room) break;
-      continue;
-    }
-    if (contains.length < room && (t.includes(q) || squash(name).includes(q))) {
-      contains.push({ ticker, name, curated: false });
-    }
+    const startsWith = t.startsWith(q);
+    if (!startsWith && !t.includes(q) && !squash(name).includes(q)) continue;
+
+    const bin = (isFund ? 2 : 0) + (startsWith ? 0 : 1);
+    if (bins[bin].length >= room) continue;
+    bins[bin].push({ ticker, name, curated: false, ...(kind ? { kind } : {}) });
+
+    // 앞 칸이 이미 다 찼으면 더 볼 것이 없습니다
+    if (bins[0].length >= room) break;
   }
 
-  return [...curatedHits, ...starts, ...contains].slice(0, limit);
+  return [...curatedHits, ...bins.flat()].slice(0, limit);
 }

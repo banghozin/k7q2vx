@@ -98,13 +98,35 @@ const ISSUE_KIND: Record<string, string> = {
 };
 
 /**
- * 층에 세워도 되는 종류. **개별 회사만** 둡니다.
+ * **층에 세워도 되는** 종류. 개별 회사만 둡니다.
  *
  * ETF·ETN 은 여러 회사를 묶은 것이라 "이 회사가 이 층에 있는 이유" 를 한 줄로
  * 쓸 수 없습니다. 벤치마크(SPY·QQQ)는 층에 세우지 않고 상대강도 계산에만
  * 쓰므로 애초에 검사 대상이 아닙니다.
+ *
+ * ⚠️ 이건 **검색 목록과 다른 기준입니다.** 나무는 ETF·SPAC 유닛·우선주까지
+ * 다 취급합니다(2026-09-06 에 나무에서 직접 확인). 검색은 나무에 있는 것을
+ * 전부 보여주고, 층에 세우는 것만 여기서 막습니다.
  */
-const ALLOWED_ISSUES = new Set(["01", "07"]);
+const LAYER_ISSUES = new Set(["01", "07"]);
+
+/**
+ * 개별 회사가 아닌 종목에 붙일 짧은 꼬리표. 검색 결과에 그대로 보입니다.
+ *
+ * 보통주(01)·예탁증서(07)에는 안 붙입니다 — 대부분이 그것이라 붙이면
+ * 목록이 같은 글자로 뒤덮입니다. **꼬리표가 없으면 개별 회사**입니다.
+ */
+const KIND_LABEL: Record<string, string> = {
+  "02": "우선주",
+  "03": "SPAC",
+  "06": "결합증권",
+  "09": "신주인수권",
+  "10": "펀드",
+  "11": "ETP",
+  "12": "ETF",
+  "13": "ETN",
+  "14": "ETC",
+};
 
 type Record_ = Record<string, string>;
 
@@ -220,7 +242,7 @@ async function main() {
       absent.push(t);
       continue;
     }
-    if (!ALLOWED_ISSUES.has(r.issue)) {
+    if (!LAYER_ISSUES.has(r.issue)) {
       wrongKind.push({
         t,
         kind: ISSUE_KIND[r.issue] ?? `알 수 없음(${r.issue})`,
@@ -295,17 +317,39 @@ async function main() {
  * 세우는 것은 큐레이션이 하는 일이지만, **차트를 열어 보는 것까지 막을
  * 이유는 없습니다.**
  *
- * 개별 회사(보통주·예탁증서)만 담습니다. ETF·ETN·우선주·SPAC 유닛·
- * 신주인수권은 뺍니다 — 5,600개가 15,000개가 되면 검색이 쓰레기가 됩니다.
+ * **나무에 있는 미국 종목을 전부** 담습니다 — 12,701개.
  *
- * 영문명은 넣지 않습니다. 한글명과 티커로 덮이는 데다, 넣으면 파일이 두 배
- * (51KB → 87KB, 압축 후)가 됩니다. 이 파일은 **검색창에 첫 글자를 칠 때**
- * 받아오므로 페이지 용량에는 영향이 없습니다.
+ * 처음에는 개별 회사만 담았습니다(5,599개). 그런데 나무에서 직접 확인해 보니
+ * SPAC 유닛(CAQUU)도, AMEX 상장분(MPU)도 다 있었습니다. "나무에 있는 것은
+ * 전부 뜨게" 가 요청이었으므로 자르지 않습니다.
+ *
+ * 대신 **개별 회사가 아닌 것에는 꼬리표를 답니다**(ETF·우선주·SPAC 등).
+ * 검색에서도 개별 회사를 먼저 보여줍니다. 안 그러면 ETF 5,580개가 목록을
+ * 덮어 정작 찾던 회사가 안 보입니다.
+ *
+ * 영문명은 넣지 않습니다. 한글명과 티커로 덮이는 데다 파일이 두 배가 됩니다.
+ * 이 파일은 **검색창에 첫 글자를 칠 때** 받아오므로 페이지 용량에는 영향이
+ * 없습니다(압축 후 130KB).
  */
 async function writeSearchList(us: Record_[]) {
   const list = us
-    .filter((r) => ALLOWED_ISSUES.has(r.issue) && r.symbol && r.korName)
-    .map((r) => [r.symbol, r.korName] as const)
+    .filter((r) => r.symbol && r.korName)
+    .map((r) => {
+      const kind = KIND_LABEL[r.issue];
+      if (!kind) return [r.symbol, r.korName];
+      /*
+       * 이름에 이미 그 말이 들어 있으면 **꼬리표를 빈 값으로** 둡니다.
+       *
+       * ETF 이름은 대부분 "…엔비디아 데일리 2배 ETF" 처럼 끝납니다. 거기에
+       * 또 [ETF] 를 붙이면 "엔비디아 데일리 2배 ETF [ETF]" 가 됩니다.
+       *
+       * 아예 빼면 안 됩니다 — 검색이 **세 번째 칸이 있느냐**로 개별 회사인지를
+       * 가려 순서를 매기기 때문입니다. 빼면 ETF 가 회사 자리로 올라옵니다.
+       * 자리는 남기고 보여줄 글자만 비웁니다.
+       */
+      const redundant = r.korName.toUpperCase().includes(kind.toUpperCase());
+      return [r.symbol, r.korName, redundant ? "" : kind];
+    })
     .sort((a, b) => a[0].localeCompare(b[0]));
 
   const path = "src/data/generated/namuh-us.json";
