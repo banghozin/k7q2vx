@@ -279,6 +279,22 @@ export function Kline({
    */
   const lockRatioRef = useRef<number | null>(null);
   const rightHitRef = useRef<{ id: string; name: string; at: number } | null>(null);
+  /**
+   * 비율 고정 중 화면 가운데의 **가격**. 처음 잠글 때 그때 봉들의 가운데로
+   * 정하고, 그 뒤로는 끌어 옮길 때만 바뀝니다.
+   *
+   * 예전에는 늘 화면 봉들의 가운데를 따라가게 했더니, 위아래로 끌어도
+   * 도로 제자리로 돌아와 **위아래로는 못 움직였습니다.** 트레이딩뷰도 비율을
+   * 고정하면 자동 맞춤이 꺼지고 위아래가 자유롭습니다.
+   *
+   * 가격(봉 값)으로 들고 있는 까닭: % 눈금은 화면 왼쪽 끝 봉이 기준이라
+   * 좌우로 옮길 때마다 눈금 값이 바뀝니다. 가격은 안 바뀝니다.
+   */
+  const lockCenterRef = useRef<number | null>(null);
+  /** 마지막으로 그린 눈금의 가격 ↔ 눈금 값 바꾸기 — 끌어 옮길 때 씁니다 */
+  const lockMapRef = useRef<{ toReal: (v: number) => number; toValue: (r: number) => number } | null>(null);
+  /** 지금 끌고 있는 것이 그림인가 — 그림을 옮길 때는 화면을 위아래로 움직이지 않습니다 */
+  const overlayDragRef = useRef(false);
 
   /*
    * 그린 것 하나에 거는 손잡이들.
@@ -298,6 +314,10 @@ export function Kline({
     },
     onRemoved: () => {
       selectRef.current?.(null);
+      return false;
+    },
+    onPressedMoveStart: () => {
+      overlayDragRef.current = true;
       return false;
     },
     onPressedMoveEnd: () => {
@@ -352,14 +372,9 @@ export function Kline({
     /*
      * 라이브러리는 여기서 돌려준 범위에 위 20%·아래 10% 여백을 덧붙입니다.
      * 비율은 여백까지 넣은 전체로 쟀으니 그만큼 덜어서 돌려줍니다.
-     * 가운데는 지금 화면 봉들의 가운데를 따라갑니다 — 고정하면 위아래로
-     * 봉이 화면 밖으로 나가는 일이 생기는데, 가운데라도 따라가야 덜 잃습니다.
      */
     const span = ((ratio / bar) * h) / (1 + GAP_TOP + GAP_BOTTOM);
-    const mid = (base.realFrom + base.realTo) / 2;
-    const realFrom = mid - span / 2;
-    const realTo = mid + span / 2;
-    // 눈금 값 → 봉 가격 — 눈금마다 다릅니다 (로그는 라이브러리 식 그대로)
+    // 눈금 값 ↔ 봉 가격 — 눈금마다 다릅니다 (로그는 라이브러리 식 그대로)
     const toValue = (r: number) =>
       name === "logarithm"
         ? r < 0
@@ -368,6 +383,21 @@ export function Kline({
         : name === "percentage"
           ? base.from + ((r - base.realFrom) / base.realRange) * base.range
           : r;
+    const toReal = (v: number) =>
+      name === "logarithm"
+        ? v < 0
+          ? -Math.log10(Math.abs(v))
+          : Math.log10(v)
+        : name === "percentage"
+          ? base.realFrom + ((v - base.from) / base.range) * base.realRange
+          : v;
+    lockMapRef.current = { toReal, toValue };
+    // 가운데 — 처음 한 번만 그때 봉들의 가운데로 정하고 그 뒤로는 그대로 (위 lockCenterRef 참고)
+    if (lockCenterRef.current == null) lockCenterRef.current = toValue((base.realFrom + base.realTo) / 2);
+    const mid = toReal(lockCenterRef.current);
+    if (!Number.isFinite(mid)) return base;
+    const realFrom = mid - span / 2;
+    const realTo = mid + span / 2;
     const f = toValue(realFrom);
     const t = toValue(realTo);
     const display = (r: number, v: number) => (name === "logarithm" ? v : r);
@@ -402,6 +432,8 @@ export function Kline({
   const relockTimer = useRef(0);
   const relock = () => {
     lockRatioRef.current = null;
+    // 새로 잠그면 가운데도 그때 봉들에 맞춰 다시 정합니다
+    lockCenterRef.current = null;
     applyYAxis();
     window.clearTimeout(relockTimer.current);
     if (!lockOnRef.current) return;
@@ -637,7 +669,71 @@ export function Kline({
           ? new ResizeObserver(() => remeasure())
           : null;
       if (ro && boxRef.current) ro.observe(boxRef.current);
+      /*
+       * 비율 고정 중 위아래로 끌기.
+       *
+       * 라이브러리는 자동 맞춤이 켜져 있으면 판을 끌어도 좌우로만 옮깁니다.
+       * 좌우는 그대로 라이브러리에 맡기고, 위아래 움직임만 여기서 받아 가운데
+       * 가격을 옮깁니다. 그림을 끌어 옮기는 중이거나, 그리는 중이거나,
+       * 손가락 두 개(확대)일 때는 건드리지 않습니다.
+       */
+      const drag = { id: -1, y: 0, active: false, frame: 0, pending: 0 };
+      const pointers = new Set<number>();
+      const onDown = (e: PointerEvent) => {
+        pointers.add(e.pointerId);
+        overlayDragRef.current = false;
+        drag.active = false;
+        if (!lockOnRef.current || pointers.size > 1 || e.button !== 0 || pendingRef.current) return;
+        const main = chartRef.current?.getDom("candle_pane", "main");
+        if (!main || !(e.target instanceof Node) || !main.contains(e.target)) return;
+        drag.id = e.pointerId;
+        drag.y = e.clientY;
+        drag.active = true;
+      };
+      const onMove = (e: PointerEvent) => {
+        if (!drag.active || e.pointerId !== drag.id) return;
+        // 그림을 눌렀는지는 누른 직후(라이브러리가 처리한 뒤)에야 압니다
+        if (overlayDragRef.current || pendingRef.current || pointers.size > 1) {
+          drag.active = false;
+          return;
+        }
+        drag.pending += e.clientY - drag.y;
+        drag.y = e.clientY;
+        if (drag.frame) return;
+        drag.frame = requestAnimationFrame(() => {
+          drag.frame = 0;
+          const chart = chartRef.current;
+          const map = lockMapRef.current;
+          const ratio = lockRatioRef.current;
+          const center = lockCenterRef.current;
+          const dy = drag.pending;
+          drag.pending = 0;
+          if (!chart || !map || ratio == null || center == null || dy === 0) return;
+          // 아래로 끌면 차트가 따라 내려옵니다 = 화면 가운데는 더 비싼 값으로
+          const perPx = ratio / chart.getBarSpace().bar;
+          const next = map.toValue(map.toReal(center) + dy * perPx * (invertRef.current ? -1 : 1));
+          if (Number.isFinite(next)) {
+            lockCenterRef.current = next;
+            applyYAxis();
+          }
+        });
+      };
+      const onUp = (e: PointerEvent) => {
+        pointers.delete(e.pointerId);
+        if (e.pointerId === drag.id) drag.active = false;
+      };
+      const box = boxRef.current;
+      box?.addEventListener("pointerdown", onDown);
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
+
       cleanupRef.current = () => {
+        box?.removeEventListener("pointerdown", onDown);
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+        cancelAnimationFrame(drag.frame);
         window.removeEventListener("resize", remeasure);
         window.removeEventListener("orientationchange", remeasure);
         ro?.disconnect();
