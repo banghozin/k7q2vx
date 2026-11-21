@@ -156,6 +156,71 @@ export const TOOL_ICONS: Record<string, () => React.ReactElement> = {
       <path d="M7 15.5 H13" />
     </Svg>
   ),
+
+  // 수평선인데 찍은 자리에서 오른쪽으로만
+  horizontalRayLine: () => (
+    <Svg>
+      <path d="M5 10 H18.5" />
+      <Dot x={5} y={10} />
+    </Svg>
+  ),
+
+  // 날짜 하나를 짚는 세로선
+  verticalStraightLine: () => (
+    <Svg>
+      <path d="M10 1.5 V18.5" />
+      <Dot x={10} y={10} />
+    </Svg>
+  ),
+
+  // 가격 꼬리표 — 선 끝에 값이 붙습니다
+  priceLine: () => (
+    <Svg>
+      <path d="M2 11 H11" />
+      <path d="M11 8 H18 V14 H11 Z" />
+      <Dot x={2} y={11} />
+    </Svg>
+  ),
+
+  // 화살표
+  arrow: () => (
+    <Svg>
+      <path d="M3 16 L16 4" />
+      <path d="M10 4 H16 V10" />
+      <Dot x={3} y={16} />
+    </Svg>
+  ),
+
+  // 사각형 — 두 모서리
+  box: () => (
+    <Svg>
+      <path d="M3 5 H17 V15 H3 Z" opacity=".16" fill="currentColor" stroke="none" />
+      <path d="M3 5 H17 V15 H3 Z" />
+      <Dot x={3} y={15} />
+      <Dot x={17} y={5} />
+    </Svg>
+  ),
+
+  // 측정 — 두 점 사이의 % · 봉 수
+  measure: () => (
+    <Svg>
+      <path d="M4 16 V4" />
+      <path d="M4 16 H16" />
+      <path d="M8 12 L14 6" />
+      <path d="M11 6 H14 V9" />
+    </Svg>
+  ),
+
+  // 포지션 — 위는 목표, 아래는 손절
+  position: () => (
+    <Svg>
+      <path d="M3 3.5 H17 V10 H3 Z" opacity=".22" fill="currentColor" stroke="none" />
+      <path d="M3 10 H17" />
+      <path d="M3 3.5 H17" />
+      <path d="M3 14.5 H17" strokeDasharray="2 2" />
+      <Dot x={3} y={10} />
+    </Svg>
+  ),
 };
 
 /**

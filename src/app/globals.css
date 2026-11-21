@@ -2413,6 +2413,515 @@ tbody tr:hover {
   color: var(--ink-3);
 }
 
+/* ── 차트 분석: 트레이딩뷰를 대신하려고 붙인 것들 ───────────────────
+ *
+ * 지표 18개·설정 칸·눈금·자석·그린 것 목록·비교·화면 나누기·가격 알림.
+ * 서랍 폭(13.5rem)이 좁아 전부 한 줄 높이로 촘촘하게 둡니다.
+ */
+
+/* 전체 화면 — 브라우저가 이 판만 화면 가득 띄웁니다 */
+.prac.is-full {
+  height: 100vh;
+  height: 100dvh;
+  border-top: 0;
+}
+
+.prac__grid--three {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.prac__row--wrap {
+  flex-wrap: wrap;
+}
+
+.prac__row--wrap .btn {
+  flex: 1 1 30%;
+}
+
+/* 머리줄 별표 — 워치리스트에 넣고 빼기 */
+.anz__star {
+  background: none;
+  border: 0;
+  padding: 0 0.15rem;
+  min-width: 24px;
+  min-height: 24px;
+  font-size: 0.95rem;
+  line-height: 1;
+  color: var(--ink-4);
+  cursor: pointer;
+}
+
+.anz__star[aria-pressed="true"] {
+  color: var(--brass);
+}
+
+.anz__check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  font-size: 0.74rem;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+
+.anz__check input {
+  accent-color: var(--brass);
+}
+
+.anz__wide {
+  width: 100%;
+  justify-content: center;
+  margin-top: 0.45rem;
+  font-size: 0.72rem;
+}
+
+/* 입력 + 단추 한 줄 (알림 가격·비교 종목·지표 묶음 이름) */
+.anz__alertform {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.anz__alertform .btn {
+  flex-shrink: 0;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.72rem;
+}
+
+.anz__alertrow {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 40px;
+  padding: 0 0.4rem;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: 0.76rem;
+  color: var(--ink-2);
+}
+
+.anz__fired .anz__alertrow {
+  color: var(--ink-4);
+}
+
+.anz__swatch {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.18rem;
+  border-radius: 1px;
+}
+
+/* 워치리스트에서 지금 보고 있는 종목 */
+.anz__watch button[aria-current="true"] {
+  background: var(--panel);
+  box-shadow: inset 2px 0 0 var(--brass);
+}
+
+/* 그린 것 목록 — 하나씩 감추기·잠그기·지우기 */
+.anz__drawlist {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  max-height: 14rem;
+  overflow-y: auto;
+  border: 1px solid var(--rule-soft);
+}
+
+.anz__drawlist li {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding-left: 0.45rem;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.anz__drawlist li:last-child {
+  border-bottom: 0;
+}
+
+.anz__drawlist li[aria-current="true"] {
+  background: var(--panel);
+  box-shadow: inset 2px 0 0 var(--brass);
+}
+
+.anz__drawname {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.74rem;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.anz__drawname.is-off {
+  color: var(--ink-4);
+  text-decoration: line-through;
+}
+
+.anz__drawlist .anz__x {
+  border-bottom: 0;
+  min-height: 34px;
+}
+
+.anz__ico {
+  background: none;
+  border: 0;
+  padding: 0 0.3rem;
+  min-height: 34px;
+  min-width: 34px;
+  font-size: 0.66rem;
+  color: var(--ink-4);
+  cursor: pointer;
+}
+
+.anz__ico:hover {
+  color: var(--ink);
+}
+
+.anz__ico[aria-pressed="true"] {
+  color: var(--brass);
+}
+
+/* ── 보조지표 목록 ── */
+
+.ind__group {
+  margin: 0.55rem 0 0.25rem;
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  color: var(--ink-4);
+}
+
+.ind__sub {
+  margin: 1rem 0 0.45rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+.ind__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--rule-soft);
+}
+
+.ind__list > li {
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.ind__list > li:last-child {
+  border-bottom: 0;
+}
+
+.ind__row {
+  display: flex;
+  align-items: stretch;
+}
+
+.ind__toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 34px;
+  padding: 0 0.5rem;
+  background: none;
+  border: 0;
+  font-size: 0.75rem;
+  color: var(--ink-3);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ind__toggle:hover {
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.ind__toggle:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ind__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-shrink: 0;
+  border: 1px solid var(--ink-4);
+  border-radius: 50%;
+}
+
+.ind__toggle[aria-pressed="true"] {
+  color: var(--ink);
+}
+
+/* 이름은 꺾지 않습니다 — 설정값이 길면 그쪽이 줄어듭니다("이동평\n균" 이 됐었습니다) */
+.ind__toggle > span:nth-child(2) {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ind__toggle[aria-pressed="true"] .ind__dot {
+  background: var(--brass);
+  border-color: var(--brass);
+}
+
+.ind__val {
+  margin-left: auto;
+  font-size: 0.64rem;
+  color: var(--ink-4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 5rem;
+}
+
+.ind__gear {
+  background: none;
+  border: 0;
+  border-left: 1px solid var(--rule-soft);
+  min-width: 34px;
+  color: var(--ink-4);
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.ind__gear:hover,
+.ind__gear[aria-expanded="true"] {
+  color: var(--brass);
+  background: var(--panel);
+}
+
+.ind__edit {
+  padding: 0.55rem 0.5rem 0.6rem;
+  background: var(--ground-2);
+  border-top: 1px solid var(--rule-soft);
+}
+
+.ind__edit label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.66rem;
+  color: var(--ink-4);
+}
+
+.ind__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(3.4rem, 1fr));
+  gap: 0.35rem;
+}
+
+.ind__fields .anz__search {
+  padding: 0.35rem 0.4rem;
+}
+
+.ind__err {
+  margin: 0.35rem 0 0;
+  font-size: 0.68rem;
+  color: var(--up);
+}
+
+/* ── 화면 나누기 ── */
+
+.prac__chart--1 {
+  display: block;
+}
+
+.prac__chart--2,
+.prac__chart--4 {
+  display: grid;
+  gap: 1px;
+  background: var(--rule);
+}
+
+.prac__chart--2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.prac__chart--4 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.prac__main {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  background: var(--ground-2);
+}
+
+.mini {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--ground-2);
+}
+
+.mini__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: 0.72rem;
+  color: var(--ink-3);
+}
+
+.mini__input {
+  width: 5.5rem;
+  padding: 0.2rem 0.35rem;
+  background: var(--ground);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--ink);
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.mini__input:focus {
+  outline: none;
+  border-color: var(--brass);
+}
+
+.mini__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-4);
+}
+
+.mini__px {
+  margin-left: auto;
+  color: var(--ink);
+}
+
+.mini__promote {
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 0.15rem 0.45rem;
+  min-height: 24px;
+  font-size: 0.66rem;
+  color: var(--ink-3);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mini__promote:hover {
+  color: var(--brass);
+  border-color: var(--brass);
+}
+
+.mini__chart {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── 단축키 안내 ── */
+
+.anz__keys {
+  position: absolute;
+  top: 0.75rem;
+  right: 5rem;
+  z-index: 20;
+  width: 15rem;
+  padding: 0.75rem 0.85rem;
+  background: var(--ground);
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  box-shadow: var(--shadow-lift);
+}
+
+.anz__keyshead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--ink);
+}
+
+.anz__keyshead .anz__x {
+  border-bottom: 0;
+  min-height: 28px;
+}
+
+.anz__keys dl {
+  margin: 0;
+}
+
+.anz__keys dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.22rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: 0.72rem;
+}
+
+.anz__keys dt {
+  margin: 0;
+}
+
+.anz__keys dd {
+  margin: 0;
+  color: var(--ink-3);
+}
+
+.anz__keys kbd {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.66rem;
+  color: var(--ink);
+}
+
+/* ── 울린 가격 알림 쪽지 ── */
+
+.anz__toasts {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-width: min(22rem, calc(100vw - 2rem));
+}
+
+.anz__toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  background: var(--ground);
+  border: 1px solid var(--brass);
+  border-radius: 3px;
+  box-shadow: var(--shadow-lift);
+  font-size: 0.78rem;
+  color: var(--ink-2);
+}
+
+.anz__toast b {
+  color: var(--brass);
+  margin-right: 0.25rem;
+}
+
+.anz__toast button {
+  margin-left: auto;
+  background: none;
+  border: 0;
+  color: var(--ink-4);
+  cursor: pointer;
+  min-width: 24px;
+  min-height: 24px;
+}
+
 /* ── 태블릿 ── */
 
 @media (max-width: 1024px) {
@@ -2473,6 +2982,32 @@ tbody tr:hover {
 
   .prac__grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  /*
+   * 폰에서는 머리줄이 이미 꽉 찹니다. 그림 저장·전체 화면·단축키(자판 전용)는
+   * 넓은 화면에서만 보입니다. 화면 나누기도 폰에서는 칸이 너무 작아져 본
+   * 차트 한 칸만 보여 줍니다(설정은 그대로라 넓은 화면에서 다시 나뉩니다).
+   */
+  .prac__wideonly {
+    display: none;
+  }
+
+  .prac__chart--2,
+  .prac__chart--4 {
+    display: block;
+  }
+
+  .prac__chart .mini {
+    display: none;
+  }
+
+  .prac__grid--three {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .anz__keys {
+    right: 0.75rem;
   }
 
   /*

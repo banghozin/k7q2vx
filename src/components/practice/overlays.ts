@@ -331,10 +331,266 @@ export const elliottTriangle = wave(
   "dashed",
 );
 
+/* ── 도우미 ─────────────────────────────────────────────────────── */
+
+type Fig = { type: string; attrs: unknown; styles?: unknown; ignoreEvent?: boolean };
+
+/** `#rrggbb` → 옅게 칠할 rgba */
+function tint(hex: string, alpha: number): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return `rgba(200,161,90,${alpha})`;
+  const n = Number.parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+}
+
+/** 글자에 어두운 받침을 깝니다 — 캔들 위에 얹혀도 읽히게 */
+const LABEL_BOX = {
+  backgroundColor: "rgba(13,17,23,0.82)",
+  borderSize: 0,
+  borderColor: "transparent",
+  borderRadius: 3,
+  paddingLeft: 5,
+  paddingRight: 5,
+  paddingTop: 3,
+  paddingBottom: 3,
+} as const;
+
+const signed = (v: number, digits = 2) => `${v >= 0 ? "+" : ""}${v.toFixed(digits)}`;
+
+/* ── 사각형 ──────────────────────────────────────────────────────
+ *
+ * 매물대·횡보 구간을 표시할 때 씁니다. 두 모서리를 찍으면 됩니다.
+ * 안쪽은 펜 색을 아주 옅게 칠해 캔들이 비쳐 보이게 둡니다.
+ */
+export const box: OverlayTemplate = {
+  name: "box",
+  totalStep: 3,
+  needDefaultPointFigure: true,
+  needDefaultXAxisFigure: false,
+  needDefaultYAxisFigure: true,
+  createPointFigures: ({ coordinates, overlay }) => {
+    if (coordinates.length < 2) return [];
+    const pen = penOf(overlay, GOLD);
+    const [a, b] = coordinates;
+    return [
+      {
+        type: "rect",
+        attrs: {
+          x: Math.min(a.x, b.x),
+          y: Math.min(a.y, b.y),
+          width: Math.abs(b.x - a.x),
+          height: Math.abs(b.y - a.y),
+        },
+        styles: {
+          style: "stroke_fill",
+          color: tint(pen.color, 0.12),
+          borderColor: pen.color,
+          borderSize: Math.max(1, pen.size * 0.8),
+        },
+      },
+    ];
+  },
+};
+
+/* ── 측정 ────────────────────────────────────────────────────────
+ *
+ * 두 점 사이가 **몇 % · 몇 봉 · 며칠** 인지. 트레이딩뷰에서 Shift 를 누르고
+ * 끌면 나오는 그것입니다. 오르는 쪽이면 빨강, 내리는 쪽이면 파랑으로 칠합니다
+ * (이 사이트의 상승·하락 색).
+ */
+export const measure: OverlayTemplate = {
+  name: "measure",
+  totalStep: 3,
+  needDefaultPointFigure: true,
+  needDefaultXAxisFigure: false,
+  needDefaultYAxisFigure: true,
+  createPointFigures: ({ coordinates, overlay }) => {
+    if (coordinates.length < 2) return [];
+    const [a, b] = coordinates;
+    const [p0, p1] = overlay.points;
+    if (typeof p0?.value !== "number" || typeof p1?.value !== "number") return [];
+    const diff = p1.value - p0.value;
+    const pct = p0.value !== 0 ? (diff / p0.value) * 100 : 0;
+    const up = diff >= 0;
+    const color = up ? "#ff5445" : "#4a90ff";
+    const bars =
+      typeof p0.dataIndex === "number" && typeof p1.dataIndex === "number"
+        ? Math.abs(p1.dataIndex - p0.dataIndex)
+        : null;
+    const days =
+      typeof p0.timestamp === "number" && typeof p1.timestamp === "number"
+        ? Math.round(Math.abs(p1.timestamp - p0.timestamp) / 86_400_000)
+        : null;
+    const left = Math.min(a.x, b.x);
+    const top = Math.min(a.y, b.y);
+    const w = Math.abs(b.x - a.x);
+    const h = Math.abs(b.y - a.y);
+    const midX = left + w / 2;
+    const parts = [`${signed(diff)} (${signed(pct)}%)`];
+    if (bars !== null) parts.push(`${bars}봉`);
+    if (days !== null && days > 0) parts.push(`${days}일`);
+    return [
+      {
+        type: "rect",
+        attrs: { x: left, y: top, width: w, height: h },
+        styles: { style: "fill", color: tint(color, 0.14) },
+        ignoreEvent: true,
+      },
+      // 가운데를 가로지르는 화살 대신 세로·가로 기준선
+      {
+        type: "line",
+        attrs: { coordinates: [{ x: midX, y: a.y }, { x: midX, y: b.y }] },
+        styles: { color, size: 1, style: "solid" },
+      },
+      {
+        type: "line",
+        attrs: { coordinates: [{ x: a.x, y: top + h / 2 }, { x: b.x, y: top + h / 2 }] },
+        styles: { color, size: 1, style: "dashed" },
+      },
+      {
+        type: "text",
+        attrs: {
+          x: midX,
+          y: up ? top - 6 : top + h + 6,
+          text: parts.join(" · "),
+          align: "center",
+          baseline: up ? "bottom" : "top",
+        },
+        styles: { ...LABEL_BOX, color, size: 11, weight: "bold" },
+        ignoreEvent: true,
+      },
+    ];
+  },
+};
+
+/* ── 포지션 (손익비) ─────────────────────────────────────────────
+ *
+ * 진입 → 손절 → 목표 순서로 세 점을 찍으면 위아래로 구간이 칠해지고
+ * **손익비** 와 각 구간의 % 가 붙습니다. 목표가 진입보다 위면 매수(롱),
+ * 아래면 매도(숏)로 봅니다.
+ *
+ * 매매노트의 R 배수와 같은 셈입니다. 사고팔 자리를 이 사이트가 정해 주는
+ * 것이 아니라, **내가 정한 자리의 비율을 재 보는 계산기**입니다.
+ *
+ * 색은 상승·하락 색(빨강·파랑)과 겹치지 않게 골랐습니다 — 손절 구간을
+ * 빨강으로 칠하면 이 사이트에서는 "오른다" 로 읽힙니다.
+ */
+const TARGET = "#5bc8d6";
+const STOP = "#d97fb8";
+
+export const position: OverlayTemplate = {
+  name: "position",
+  totalStep: 4,
+  needDefaultPointFigure: true,
+  needDefaultXAxisFigure: false,
+  needDefaultYAxisFigure: true,
+  createPointFigures: ({ coordinates, overlay }) => {
+    if (coordinates.length < 2) return [];
+    const pts = overlay.points;
+    const entry = pts[0]?.value;
+    const stop = pts[1]?.value;
+    if (typeof entry !== "number" || typeof stop !== "number") return [];
+    const target = typeof pts[2]?.value === "number" ? (pts[2].value as number) : null;
+
+    const x0 = coordinates[0].x;
+    const xs = coordinates.map((c) => c.x);
+    let right = Math.max(...xs);
+    if (right - x0 < 40) right = x0 + 140; // 한 자리에 찍으면 폭을 줍니다
+    const left = Math.min(...xs);
+    const yE = coordinates[0].y;
+    const yS = coordinates[1].y;
+    const yT = coordinates[2]?.y;
+
+    const figs: Fig[] = [];
+    const band = (y1: number, y2: number, color: string) =>
+      figs.push({
+        type: "rect",
+        attrs: { x: left, y: Math.min(y1, y2), width: right - left, height: Math.abs(y2 - y1) },
+        styles: { style: "fill", color: tint(color, 0.16) },
+        ignoreEvent: true,
+      });
+    const line = (y: number, color: string, dashed = false) =>
+      figs.push({
+        type: "line",
+        attrs: { coordinates: [{ x: left, y }, { x: right, y }] },
+        styles: { color, size: 1.2, style: dashed ? "dashed" : "solid" },
+      });
+    const label = (y: number, text: string, color: string, above: boolean) =>
+      figs.push({
+        type: "text",
+        attrs: { x: right - 4, y: above ? y - 4 : y + 4, text, align: "right", baseline: above ? "bottom" : "top" },
+        styles: { ...LABEL_BOX, color, size: 11 },
+        ignoreEvent: true,
+      });
+
+    const risk = Math.abs(entry - stop);
+    const stopPct = ((stop - entry) / entry) * 100;
+    band(yE, yS, STOP);
+    line(yS, STOP);
+    label(yS, `손절 ${stop.toFixed(2)} (${signed(stopPct)}%)`, STOP, yS < yE);
+
+    if (target !== null && yT !== undefined) {
+      const long = target >= entry;
+      const reward = Math.abs(target - entry);
+      const tPct = ((target - entry) / entry) * 100;
+      band(yE, yT, TARGET);
+      line(yT, TARGET);
+      label(yT, `목표 ${target.toFixed(2)} (${signed(tPct)}%)`, TARGET, yT < yE);
+      const rr = risk > 0 ? reward / risk : 0;
+      // 손절이 목표와 같은 쪽에 있으면 계산이 뜻이 없습니다
+      const sane = long ? stop < entry : stop > entry;
+      label(
+        yE,
+        sane
+          ? `${long ? "매수" : "매도"} ${entry.toFixed(2)} · 손익비 1 : ${rr.toFixed(2)}`
+          : `진입 ${entry.toFixed(2)} · 손절이 목표와 같은 쪽입니다`,
+        INK,
+        yT > yE,
+      );
+    } else {
+      label(yE, `진입 ${entry.toFixed(2)} — 목표를 찍으세요`, INK, yS > yE);
+    }
+    line(yE, MUTED);
+    return figs;
+  },
+};
+
+/* ── 화살표 ─────────────────────────────────────────────────────── */
+export const arrow: OverlayTemplate = {
+  name: "arrow",
+  totalStep: 3,
+  needDefaultPointFigure: true,
+  needDefaultXAxisFigure: false,
+  needDefaultYAxisFigure: false,
+  createPointFigures: ({ coordinates, overlay }) => {
+    if (coordinates.length < 2) return [];
+    const pen = penOf(overlay, GOLD);
+    const [a, b] = coordinates;
+    const ang = Math.atan2(b.y - a.y, b.x - a.x);
+    const len = 9 + pen.size * 2;
+    const wing = (d: number) => ({
+      x: b.x - len * Math.cos(ang + d),
+      y: b.y - len * Math.sin(ang + d),
+    });
+    return [
+      { type: "line", attrs: { coordinates: [a, b] }, styles: { color: pen.color, size: pen.size } },
+      {
+        type: "polygon",
+        attrs: { coordinates: [b, wing(0.45), wing(-0.45)] },
+        styles: { style: "fill", color: pen.color },
+      },
+    ];
+  },
+};
+
 export const CUSTOM_OVERLAYS: OverlayTemplate[] = [
   fibRetracement,
   elliottImpulse,
   elliottCorrection,
   elliottTriangle,
   freeCurve,
+  box,
+  measure,
+  position,
+  arrow,
 ];

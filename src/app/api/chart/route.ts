@@ -16,7 +16,8 @@ const UA =
  * 일봉 이상은 전 기간입니다. 4시간봉은 야후가 주지 않아 60분봉을 넷씩 묶어
  * 화면에서 만듭니다.
  */
-const OK_INTERVAL = new Set(["5m", "15m", "30m", "60m", "1d", "1wk", "1mo"]);
+// 1분봉은 야후가 7일치만 줍니다 (range=7d)
+const OK_INTERVAL = new Set(["1m", "5m", "15m", "30m", "60m", "1d", "1wk", "1mo"]);
 
 /*
  * ⚠️ `range=max` 는 **요청한 봉 단위를 무시합니다.** 전체 기간 길이를 보고
@@ -33,6 +34,8 @@ const OK_INTERVAL = new Set(["5m", "15m", "30m", "60m", "1d", "1wk", "1mo"]);
  * `40y` 를 씁니다(ETN 481봉 = 40년치). `max` 는 목록에 두되 쓰지 마세요.
  */
 const OK_RANGE = new Set([
+  "1d", // 가격 알림이 오늘치 1분봉만 볼 때
+  "5d",
   "1mo",
   "3mo",
   "6mo",
@@ -84,6 +87,16 @@ export async function GET(req: Request) {
   const ticker = (url.searchParams.get("ticker") ?? "").trim().toUpperCase();
   const interval = url.searchParams.get("interval") ?? "1d";
   const range = url.searchParams.get("range") ?? "1y";
+  /*
+   * 장전·장후 거래 포함. 분·시간봉에서만 뜻이 있습니다(일봉은 야후가 무시).
+   */
+  const prepost = url.searchParams.get("prepost") === "1";
+  /*
+   * 가격 알림이 1분마다 확인할 때 씁니다. 평소의 15분 캐시를 그대로 쓰면
+   * 알림이 최대 15분 늦게 울립니다.
+   */
+  const fresh = url.searchParams.get("fresh") === "1";
+  const ttl = fresh ? 30 : 900;
 
   if (!/^[A-Z0-9.\-]{1,10}$/.test(ticker)) {
     return Response.json({ error: "잘못된 티커" }, { status: 400 });
@@ -106,12 +119,12 @@ export async function GET(req: Request) {
 
   const target = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
     yahooTicker,
-  )}?interval=${interval}&range=${range}`;
+  )}?interval=${interval}&range=${range}${prepost ? "&includePrePost=true" : ""}`;
 
   try {
     const r = await fetch(target, {
       headers: { "User-Agent": UA, Accept: "application/json" },
-      next: { revalidate: 900 }, // 15분 캐시
+      next: { revalidate: ttl }, // 평소 15분, 알림 확인은 30초
     });
     if (!r.ok) {
       return Response.json({ error: "시세를 받지 못했습니다" }, { status: 502 });
@@ -212,7 +225,9 @@ export async function GET(req: Request) {
       },
       {
         headers: {
-          "Cache-Control": "public, s-maxage=900, stale-while-revalidate=3600",
+          "Cache-Control": fresh
+            ? "public, s-maxage=30, stale-while-revalidate=30"
+            : "public, s-maxage=900, stale-while-revalidate=3600",
         },
       },
     );

@@ -12,11 +12,22 @@ import {
 } from "@/components/practice/kline";
 import { HandIcon } from "@/components/practice/hand-icon";
 import { ToolButton } from "@/components/practice/tool-button";
-import { INDICATOR_ICONS, TOOL_ICONS } from "@/components/practice/tool-icons";
+import { TOOL_ICONS } from "@/components/practice/tool-icons";
 import { PenPicker } from "@/components/practice/pen-picker";
 import { WatchLevels } from "@/components/analyze/watch-levels";
+import { IndicatorPanel } from "@/components/analyze/indicator-panel";
+import { MiniChart } from "@/components/analyze/mini-chart";
+import { PriceAlerts } from "@/components/analyze/price-alerts";
+import { SPEC_BY_KEY, paramsOf } from "@/components/analyze/indicator-catalog";
+import { COMPARE_SLOTS } from "@/components/practice/indicators";
 import { recentSheets, sheetKey, useAnalysis } from "@/lib/store/analysis-store";
-import { useChartPrefs } from "@/lib/store/chart-prefs-store";
+import {
+  type IndTemplate,
+  type Magnet,
+  type YScale,
+  useChartPrefs,
+} from "@/lib/store/chart-prefs-store";
+import { useWatchlist } from "@/lib/store/watchlist-store";
 import { useNotes } from "@/lib/store/notes-store";
 import {
   SENSITIVITY,
@@ -57,6 +68,8 @@ const TIMEFRAMES: {
   group: number;
   period: Period;
 }[] = [
+  // 1분봉은 야후가 7일치만 줍니다
+  { key: "1m", label: "1분", interval: "1m", range: "7d", group: 1, period: { type: "minute", span: 1 } },
   { key: "5m", label: "5분", interval: "5m", range: "60d", group: 1, period: { type: "minute", span: 5 } },
   { key: "15m", label: "15분", interval: "15m", range: "60d", group: 1, period: { type: "minute", span: 15 } },
   { key: "30m", label: "30분", interval: "30m", range: "60d", group: 1, period: { type: "minute", span: 30 } },
@@ -77,36 +90,89 @@ const DRAW_GROUPS: {
       { key: "elliottImpulse", label: "12345 파동", hint: "출발점부터 여섯 점" },
       { key: "elliottCorrection", label: "ABC 조정", hint: "출발점부터 네 점. Z 자" },
       { key: "elliottTriangle", label: "abcde 삼각형", hint: "출발점부터 여섯 점" },
-      { key: "fibRetracement", label: "피보나치", hint: "고점과 저점 두 점" },
+      { key: "fibRetracement", label: "피보나치", hint: "고점과 저점 두 점 (Alt+F)" },
     ],
   },
   {
     title: "선",
     tools: [
-      { key: "segment", label: "추세선", hint: "찍은 두 점 사이만" },
+      { key: "segment", label: "추세선", hint: "찍은 두 점 사이만 (Alt+T)" },
       { key: "straightLine", label: "연장선", hint: "양쪽으로 끝없이" },
       { key: "rayLine", label: "반직선", hint: "한쪽으로만" },
-      { key: "horizontalStraightLine", label: "수평선", hint: "지지·저항 자리" },
+      { key: "horizontalStraightLine", label: "수평선", hint: "지지·저항 자리 (Alt+H)" },
+      { key: "horizontalRayLine", label: "수평 반직선", hint: "찍은 자리에서 오른쪽으로만 (Alt+J)" },
+      { key: "verticalStraightLine", label: "세로선", hint: "날짜 하나를 짚습니다 (Alt+V)" },
+      { key: "priceLine", label: "가격 꼬리표", hint: "선 끝에 가격이 붙습니다" },
       { key: "priceChannelLine", label: "채널", hint: "세 점으로 평행 채널" },
       { key: "parallelStraightLine", label: "평행선", hint: "세 점으로 평행선" },
+      { key: "arrow", label: "화살표", hint: "두 점. 끝에 화살촉" },
       { key: "freeCurve", label: "자유곡선", hint: "누른 채로 끌면 그려집니다" },
       { key: "simpleAnnotation", label: "메모", hint: "글자를 적습니다" },
     ],
   },
+  {
+    title: "모양·측정",
+    tools: [
+      { key: "box", label: "사각형", hint: "두 모서리. 매물대·횡보 구간 (Alt+R)" },
+      { key: "measure", label: "측정", hint: "두 점 사이 몇 %·몇 봉·며칠 (Alt+M)" },
+      { key: "position", label: "포지션", hint: "진입→손절→목표 세 점. 손익비가 나옵니다 (Alt+P)" },
+    ],
+  },
 ];
+
+/*
+ * 단축키 — 트레이딩뷰와 같은 자리에 둡니다(Alt+T 추세선, Alt+H 수평선 …).
+ * 글자(`e.key`)가 아니라 **자판 위치(`e.code`)** 로 봅니다. 한글 입력 상태에서는
+ * Alt+T 를 눌러도 `e.key` 가 "ㅅ" 로 옵니다.
+ */
+const SHORTCUT_TOOLS: Record<string, string> = {
+  KeyT: "segment",
+  KeyH: "horizontalStraightLine",
+  KeyJ: "horizontalRayLine",
+  KeyV: "verticalStraightLine",
+  KeyF: "fibRetracement",
+  KeyR: "box",
+  KeyM: "measure",
+  KeyP: "position",
+};
+
+const SHORTCUT_HELP: [string, string][] = [
+  ["Alt+T", "추세선"],
+  ["Alt+H", "수평선"],
+  ["Alt+J", "수평 반직선"],
+  ["Alt+V", "세로선"],
+  ["Alt+F", "피보나치"],
+  ["Alt+R", "사각형"],
+  ["Alt+M", "측정"],
+  ["Alt+P", "포지션"],
+  ["Esc", "도구 놓기"],
+  ["Ctrl+Z", "되돌리기"],
+  ["Ctrl+Y", "다시 하기"],
+  ["Ctrl+D", "고른 것 복제"],
+  ["Alt+L", "고른 것 잠그기"],
+  ["Del", "고른 것 지우기"],
+  ["↑ / ↓", "워치리스트 앞·뒤 종목"],
+];
+
+/** 수평으로 가격 하나를 짚는 도구 — 알림을 걸 수 있는 선 */
+const LEVEL_TOOLS = new Set([
+  "horizontalStraightLine",
+  "horizontalRayLine",
+  "horizontalSegment",
+  "priceLine",
+]);
+
+/** 비교 종목 선 색 — 캔들 빨강·파랑과 겹치지 않게 */
+const COMPARE_COLORS = ["#f0a23c", "#9b8ec4", "#7fa86b"];
+
+/** 되돌리기 기록을 몇 단계까지 들고 있을지 */
+const MAX_HISTORY = 60;
 
 const TOOL_NAME: Record<string, string> = Object.fromEntries(
   DRAW_GROUPS.flatMap((g) => g.tools.map((t) => [t.key, t.label])),
 );
 
-const INDICATORS = [
-  { key: "MA", label: "이동평균", onCandle: true },
-  { key: "BOLL", label: "볼린저", onCandle: true },
-  { key: "VOL", label: "거래량", onCandle: false },
-  { key: "MACD", label: "MACD", onCandle: false },
-  { key: "RSI", label: "RSI", onCandle: false },
-  { key: "KDJ", label: "스토캐스틱", onCandle: false },
-];
+/* 보조지표 목록은 indicator-catalog.ts 로 옮겼습니다 (18개 + 설정 칸) */
 
 /* 회고 모드에서 실제로 사고판 자리를 표시하는 색 (한국 관행: 상승 빨강) */
 const ENTRY_COLOR = "#e0564f";
@@ -158,7 +224,9 @@ export function AnalyzeBoard({
   const [chartReady, setChartReady] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [tool, setTool] = useState<string | null>(null);
-  const [drawings, setDrawings] = useState<{ id: string; name: string }[]>([]);
+  const [drawings, setDrawings] = useState<
+    { id: string; name: string; locked: boolean; hidden: boolean; points: { value?: number }[] }[]
+  >([]);
   const [picked, setPicked] = useState<{ id: string; name: string } | null>(null);
   /*
    * 펜은 저장해 둔 것에서 시작합니다. 매번 들어올 때마다 쓰던 색을 다시
@@ -216,6 +284,32 @@ export function AnalyzeBoard({
 
   const [savedAt, setSavedAt] = useState<string | null>(null);
 
+  /* ── 트레이딩뷰를 대신하려고 붙인 설정들 (이 기기에 남습니다) ── */
+  const indParams = useChartPrefs((s) => s.indParams);
+  const setIndParams = useChartPrefs((s) => s.setIndParams);
+  const yScale = useChartPrefs((s) => s.yScale);
+  const setYScale = useChartPrefs((s) => s.setYScale);
+  const magnet = useChartPrefs((s) => s.magnet);
+  const setMagnet = useChartPrefs((s) => s.setMagnet);
+  const templates = useChartPrefs((s) => s.templates);
+  const saveTemplate = useChartPrefs((s) => s.saveTemplate);
+  const removeTemplate = useChartPrefs((s) => s.removeTemplate);
+  const compare = useChartPrefs((s) => s.compare);
+  const setCompare = useChartPrefs((s) => s.setCompare);
+  const prepost = useChartPrefs((s) => s.prepost);
+  const setPrepost = useChartPrefs((s) => s.setPrepost);
+  const layout = useChartPrefs((s) => s.layout);
+  const setLayout = useChartPrefs((s) => s.setLayout);
+  const layoutTickers = useChartPrefs((s) => s.layoutTickers);
+  const setLayoutTickers = useChartPrefs((s) => s.setLayoutTickers);
+  const watch = useWatchlist((s) => s.items);
+  const watchHydrated = useWatchlist((s) => s.hydrated);
+  const toggleWatch = useWatchlist((s) => s.toggle);
+  const [cmpInput, setCmpInput] = useState("");
+  const [showKeys, setShowKeys] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
   const sheets = useAnalysis((s) => s.sheets);
   const hydrated = useAnalysis((s) => s.hydrated);
   const saveSheet = useAnalysis((s) => s.save);
@@ -237,7 +331,12 @@ export function AnalyzeBoard({
   );
   const reviewing = Boolean(review?.chart);
 
-  const tfNow = TIMEFRAMES.find((t) => t.key === tfKey) ?? TIMEFRAMES[5];
+  // 못 찾으면 일봉 — 1분봉을 맨 앞에 끼워 넣어서 번호로 고르면 어긋납니다
+  const tfNow =
+    TIMEFRAMES.find((t) => t.key === tfKey) ?? TIMEFRAMES.find((t) => t.key === "1d")!;
+  /** 분·시간봉인가 — 시간외·VWAP 는 여기서만 뜻이 있습니다 */
+  const intraday = tfNow.period.type === "minute" || tfNow.period.type === "hour";
+  const usePrepost = intraday && prepost;
   const penRef = useRef({ color: penColor, size: penSize });
   penRef.current = { color: penColor, size: penSize };
   const toolRef = useRef<string | null>(null);
@@ -250,7 +349,7 @@ export function AnalyzeBoard({
     (async () => {
       try {
         const r = await fetch(
-          `/api/chart?ticker=${encodeURIComponent(ticker)}&interval=${tfNow.interval}&range=${tfNow.range}`,
+          `/api/chart?ticker=${encodeURIComponent(ticker)}&interval=${tfNow.interval}&range=${tfNow.range}${usePrepost ? "&prepost=1" : ""}`,
         );
         if (!r.ok) throw new Error("시세를 받지 못했습니다");
         const j = (await r.json()) as { candles: Bar[] };
@@ -268,7 +367,7 @@ export function AnalyzeBoard({
     return () => {
       alive = false;
     };
-  }, [ticker, tfNow]);
+  }, [ticker, tfNow, usePrepost]);
 
   const feed: KLineData[] = useMemo(
     () =>
@@ -348,6 +447,9 @@ export function AnalyzeBoard({
         setSavedAt(null);
       }
     }
+    // 새 종목·봉 단위로 들어왔으니 되돌리기 기록은 여기서부터 다시 셉니다
+    historyRef.current = { past: [], future: [], last: chart.current?.exportDrawings() ?? [] };
+    setHistLen({ past: 0, future: 0 });
     setTimeout(refreshDrawings, 200);
     // sheets 는 저장할 때마다 바뀌므로 의존성에서 뺍니다 — 넣으면 저장할 때
     // 마다 차트를 다시 그리게 됩니다
@@ -362,14 +464,89 @@ export function AnalyzeBoard({
    * 저장된 값을 아직 못 읽었을 때(`hydrated` 전) 부르면 빈 목록으로
    * 맞춰 버리므로 기다립니다.
    */
+  /*
+   * 지금 차트에 올릴 지표 목록 — 켜 둔 것 + 각자의 설정.
+   * VWAP 처럼 분·시간봉에서만 뜻이 있는 것은 일봉에서 잠시 빼 둡니다
+   * (켜 둔 기록은 그대로라 분봉으로 돌아오면 다시 뜹니다).
+   */
+  const indList = useMemo(
+    () =>
+      savedInd
+        .map((k) => SPEC_BY_KEY.get(k))
+        .filter((s): s is NonNullable<typeof s> => Boolean(s) && !(s!.intradayOnly && !intraday))
+        .map((s) => ({
+          name: s.key,
+          onCandle: s.onCandle,
+          params: s.defaults.length > 0 ? paramsOf(s.key, indParams) : undefined,
+        })),
+    [savedInd, indParams, intraday],
+  );
+
   useEffect(() => {
     if (!chartReady || !prefsHydrated || feed.length === 0) return;
-    const want = INDICATORS.filter((i) => savedInd.includes(i.key));
-    chart.current?.setIndicators(
-      want.map((i) => ({ name: i.key, onCandle: i.onCandle })),
-    );
-    setActiveInd(new Set(want.map((i) => i.key)));
-  }, [chartReady, prefsHydrated, savedInd, feed]);
+    chart.current?.setIndicators(indList);
+    setActiveInd(new Set(savedInd.filter((k) => SPEC_BY_KEY.has(k))));
+  }, [chartReady, prefsHydrated, savedInd, feed, indList]);
+
+  const toggleInd = useCallback(
+    (key: string) => {
+      const next = savedInd.includes(key) ? savedInd.filter((k) => k !== key) : [...savedInd, key];
+      rememberInd("analyze", next);
+    },
+    [savedInd, rememberInd],
+  );
+
+  /* ── 가격 눈금 · 자석 ── */
+  useEffect(() => {
+    if (chartReady && prefsHydrated) chart.current?.setYScale(yScale);
+  }, [chartReady, prefsHydrated, yScale]);
+
+  useEffect(() => {
+    if (chartReady && prefsHydrated) chart.current?.setMagnet(magnet);
+  }, [chartReady, prefsHydrated, magnet]);
+
+  /* ── 비교 종목 ───────────────────────────────────────────────
+   *
+   * 같은 봉 단위로 받아서 **시각을 맞춰** 겹칩니다. 시각이 안 맞는 봉(한쪽만
+   * 거래한 날)은 비워 둡니다. 화면 왼쪽 끝 봉에서 둘이 같이 출발하게 그립니다.
+   */
+  useEffect(() => {
+    if (!chartReady || !prefsHydrated || feed.length === 0) return;
+    let alive = true;
+    COMPARE_SLOTS.forEach((slot, i) => {
+      const t = compare[i];
+      if (!t) {
+        chart.current?.setCompare(slot, null);
+        return;
+      }
+      fetch(
+        `/api/chart?ticker=${encodeURIComponent(t)}&interval=${tfNow.interval}&range=${tfNow.range}${usePrepost ? "&prepost=1" : ""}`,
+      )
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j: { candles?: Bar[] } | null) => {
+          if (!alive || !j) return;
+          const closes: Record<number, number> = {};
+          for (const b of groupBars(j.candles ?? [], tfNow.group)) closes[b.time * 1000] = b.close;
+          chart.current?.setCompare(slot, { ticker: t, color: COMPARE_COLORS[i], closes });
+        })
+        .catch(() => {});
+    });
+    return () => {
+      alive = false;
+    };
+  }, [chartReady, prefsHydrated, feed, compare, tfNow, usePrepost]);
+
+  const addCompare = (raw: string) => {
+    const t = raw.trim().toUpperCase();
+    if (!/^[A-Z0-9.-]{1,10}$/.test(t) || t === ticker || compare.includes(t) || compare.length >= 3) return;
+    setCompare([...compare, t]);
+    setCmpInput("");
+    /*
+     * 처음 겹칠 때 눈금을 % 로 돌립니다. 값이 다른 두 종목을 가격 눈금으로
+     * 겹치면 출발점만 맞을 뿐 폭을 견주기 어렵습니다 — 트레이딩뷰도 이렇게 합니다.
+     */
+    if (compare.length === 0 && yScale === "normal") setYScale("percentage");
+  };
 
   /* ── 그린 것 저장 ────────────────────────────────────────────── */
   const save = useCallback(() => {
@@ -387,10 +564,58 @@ export function AnalyzeBoard({
    * 브라우저에만 쓰는 것이라 비용도 없습니다. 단추는 그대로 두되(직접 누르고
    * 싶은 사람이 있으므로) 누르지 않아도 남습니다.
    */
+  /*
+   * ── 되돌리기 · 다시 하기 ───────────────────────────────────────
+   *
+   * 예전 되돌리기는 "마지막에 그린 것 하나 지우기" 였습니다. 그래서 옮긴 것,
+   * 색 바꾼 것, 지운 것은 되돌릴 수 없었고 다시 하기도 없었습니다.
+   *
+   * 지금은 바뀔 때마다 **그린 것 전체를 사진 찍듯** 남겨 둡니다. 되돌리면
+   * 앞 사진으로, 다시 하면 뒤 사진으로 통째로 바꿉니다. 무엇을 했든 똑같이
+   * 되돌아갑니다. 그림이 많아도 숫자 몇 개라 가볍습니다.
+   */
+  const historyRef = useRef<{ past: SavedDrawing[][]; future: SavedDrawing[][]; last: SavedDrawing[] }>({
+    past: [],
+    future: [],
+    last: [],
+  });
+  const [histLen, setHistLen] = useState({ past: 0, future: 0 });
+
+  const commit = useCallback(() => {
+    if (reviewing) return;
+    const now = chart.current?.exportDrawings() ?? [];
+    const h = historyRef.current;
+    if (JSON.stringify(now) === JSON.stringify(h.last)) return;
+    h.past.push(h.last);
+    if (h.past.length > MAX_HISTORY) h.past.shift();
+    h.last = now;
+    h.future = [];
+    setHistLen({ past: h.past.length, future: 0 });
+  }, [reviewing]);
+
   const autoSave = useCallback(() => {
     refreshDrawings();
+    commit();
     save();
-  }, [refreshDrawings, save]);
+  }, [refreshDrawings, commit, save]);
+
+  const travel = useCallback(
+    (dir: "back" | "forward") => {
+      const h = historyRef.current;
+      const from = dir === "back" ? h.past : h.future;
+      const to = dir === "back" ? h.future : h.past;
+      const target = from.pop();
+      if (!target) return;
+      to.push(h.last);
+      h.last = target;
+      chart.current?.restoreDrawings(target);
+      setPicked(null);
+      setHistLen({ past: h.past.length, future: h.future.length });
+      refreshDrawings();
+      save();
+    },
+    [refreshDrawings, save],
+  );
 
   /*
    * ── 이동·선택 모드 ─────────────────────────────────────────────
@@ -562,31 +787,131 @@ export function AnalyzeBoard({
     autoSave();
   }, [picked, autoSave]);
 
-  const undo = useCallback(() => {
-    chart.current?.undo();
-    setPicked(null);
+  const undo = useCallback(() => travel("back"), [travel]);
+  const redo = useCallback(() => travel("forward"), [travel]);
+
+  /*
+   * 고른 것 복제 — 같은 자리에 겹치면 복제된 줄 모르므로 **가격을 조금(2%)
+   * 올려** 놓습니다. 그 다음 끌어서 원하는 자리로 옮기면 됩니다.
+   */
+  const clonePicked = useCallback(() => {
+    if (!picked) return;
+    const src = chart.current?.listDrawings().find((d) => d.id === picked.id);
+    if (!src) return;
+    chart.current?.importDrawings([
+      {
+        name: src.name,
+        color: src.color,
+        size: src.size,
+        points: src.points.map((p) => ({
+          timestamp: p.timestamp,
+          value: typeof p.value === "number" ? p.value * 1.02 : p.value,
+        })),
+      },
+    ]);
     autoSave();
-  }, [autoSave]);
+  }, [picked, autoSave]);
+
+  /*
+   * 잠금 — 잠긴 것은 눌러도 골라지지 않습니다(라이브러리가 그렇게 동작합니다).
+   * 그래서 푸는 일은 아래 "그린 것" 목록에서 합니다.
+   */
+  const setLocked = useCallback(
+    (id: string, locked: boolean) => {
+      chart.current?.setDrawingLocked(id, locked);
+      if (locked && picked?.id === id) setPicked(null);
+      autoSave();
+    },
+    [picked, autoSave],
+  );
+
+  const setHidden = useCallback(
+    (id: string, hidden: boolean) => {
+      chart.current?.setDrawingHidden(id, hidden);
+      autoSave();
+    },
+    [autoSave],
+  );
+
+  /* ── 그림 저장 · 전체 화면 ── */
+  const downloadPicture = useCallback(() => {
+    const url = chart.current?.picture();
+    if (!url) return;
+    const a = document.createElement("a");
+    const d = new Date();
+    const p = (n: number) => String(n).padStart(2, "0");
+    a.href = url;
+    a.download = `${ticker}_${tfKey}_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}.png`;
+    a.click();
+  }, [ticker, tfKey]);
+
+  useEffect(() => {
+    const on = () => setFullscreen(document.fullscreenElement === rootRef.current);
+    document.addEventListener("fullscreenchange", on);
+    return () => document.removeEventListener("fullscreenchange", on);
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else rootRef.current?.requestFullscreen?.().catch(() => {});
+  }, []);
+
+  /*
+   * 워치리스트 앞·뒤 종목. 지금 종목이 목록에 없으면 첫 종목으로 갑니다.
+   */
+  const stepWatch = useCallback(
+    (d: 1 | -1) => {
+      if (watch.length === 0) return;
+      const i = watch.findIndex((w) => w.ticker === ticker);
+      const n = i < 0 ? 0 : (i + d + watch.length) % watch.length;
+      setTicker(watch[n].ticker);
+    },
+    [watch, ticker],
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       const tag = el?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || el?.isContentEditable) return;
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable) return;
+      const mod = e.ctrlKey || e.metaKey;
+      const k = e.key.toLowerCase();
+      if (mod && (k === "y" || (k === "z" && e.shiftKey))) {
+        e.preventDefault();
+        redo();
+      } else if (mod && k === "z") {
         e.preventDefault();
         undo();
+      } else if (mod && e.code === "KeyD") {
+        if (!picked) return;
+        e.preventDefault(); // 브라우저 즐겨찾기 단축키를 막습니다
+        clonePicked();
+      } else if (e.altKey && e.code === "KeyL") {
+        if (!picked) return;
+        e.preventDefault();
+        setLocked(picked.id, true);
+      } else if (e.altKey && SHORTCUT_TOOLS[e.code]) {
+        if (reviewing) return;
+        e.preventDefault();
+        armTool(SHORTCUT_TOOLS[e.code]);
       } else if (e.key === "Delete" || e.key === "Backspace") {
         if (!picked) return;
         e.preventDefault();
         removePicked();
       } else if (e.key === "Escape") {
         stopDraw();
+        setShowKeys(false);
+      } else if (!mod && !e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+        if (watch.length === 0) return;
+        e.preventDefault();
+        stepWatch(e.key === "ArrowUp" ? -1 : 1);
+      } else if (e.key === "?") {
+        setShowKeys((v) => !v);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undo, picked, removePicked, stopDraw]);
+  }, [undo, redo, picked, removePicked, stopDraw, clonePicked, setLocked, armTool, reviewing, watch, stepWatch]);
 
   const applyPen = useCallback(
     (color: string, size: number) => {
@@ -618,6 +943,42 @@ export function AnalyzeBoard({
     return searchNamuh(namuhRows, raw, curated, 8);
   }, [query, namuhRows]);
 
+  /*
+   * 큐레이션 밖 종목(나무 검색으로 연 것)은 `nameOf` 가 이름을 모릅니다.
+   * 머리줄이 "—" 로 비지 않게 나무 목록에서 찾아 붙입니다.
+   */
+  const [otherName, setOtherName] = useState<string | null>(null);
+  useEffect(() => {
+    setOtherName(null);
+    if (nameOf(ticker)) return;
+    let alive = true;
+    loadNamuhList().then((rows) => {
+      const hit = rows.find((r) => r[0] === ticker);
+      if (alive && hit) setOtherName(hit[1] ?? null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [ticker]);
+  const displayName = nameOf(ticker) ?? otherName;
+  const inWatch = watchHydrated && watch.some((w) => w.ticker === ticker);
+  /** 골라 둔 것이 수평선류면 그 가격 — 알림을 걸 수 있습니다 */
+  const pickedLevel = useMemo(() => {
+    if (!picked || !LEVEL_TOOLS.has(picked.name)) return null;
+    const v = drawings.find((d) => d.id === picked.id)?.points?.[0]?.value;
+    return typeof v === "number" ? v : null;
+  }, [picked, drawings]);
+  const miniCount = layout - 1;
+  const miniTickers = useMemo(() => {
+    /*
+     * 비어 있는 칸은 지수 ETF 로 채웁니다. 본 차트 종목과 겹치지 않게 넉넉히
+     * 넷을 두고 거릅니다 — 셋만 두면 본 차트가 NVDA 일 때 하나가 모자라
+     * SPY 가 두 번 떴습니다.
+     */
+    const fill = ["SPY", "QQQ", "IWM", "NVDA"].filter((t) => t !== ticker);
+    return Array.from({ length: miniCount }, (_, i) => layoutTickers[i] ?? fill[i]);
+  }, [miniCount, layoutTickers, ticker]);
+
   const saved = hydrated ? recentSheets(sheets) : [];
   const last = bars.at(-1);
   const prev = bars.at(-2);
@@ -627,7 +988,7 @@ export function AnalyzeBoard({
       : null;
 
   return (
-    <div className="prac">
+    <div className={`prac${fullscreen ? " is-full" : ""}`} ref={rootRef}>
       {/*
         이 화면은 곧바로 h2 부터 시작하고 있었습니다. 다른 화면은 모두 h1 이
         있는데 여기만 없어서, 화면을 소리로 듣는 사람에게는 "무슨 쪽인지" 를
@@ -640,7 +1001,18 @@ export function AnalyzeBoard({
           <span className="prac__eyebrow">차트 분석</span>
           <span className="prac__name mono">
             {ticker}
-            <span className="prac__namekr">{nameOf(ticker) ?? "—"}</span>
+            <span className="prac__namekr">{displayName ?? "—"}</span>
+            {/* 워치리스트에 넣고 빼기 — ↑↓ 로 넘겨 볼 목록입니다 */}
+            <button
+              type="button"
+              className="anz__star"
+              aria-pressed={inWatch}
+              aria-label={inWatch ? `${ticker} 워치리스트에서 빼기` : `${ticker} 워치리스트에 넣기`}
+              title={inWatch ? "워치리스트에서 빼기" : "워치리스트에 넣기"}
+              onClick={() => toggleWatch(ticker, displayName ?? ticker)}
+            >
+              {inWatch ? "★" : "☆"}
+            </button>
           </span>
         </div>
 
@@ -685,6 +1057,32 @@ export function AnalyzeBoard({
             onClick={() => chart.current?.fitAll(feed.length)}
           >
             전체 보기
+          </button>
+          <button
+            type="button"
+            className="btn btn--ghost prac__wideonly"
+            title="지금 차트를 그림 파일(PNG)로 저장합니다"
+            onClick={downloadPicture}
+          >
+            그림 저장
+          </button>
+          <button
+            type="button"
+            className="btn btn--ghost prac__wideonly"
+            aria-pressed={fullscreen}
+            title="화면 전체를 차트로 씁니다 (Esc 로 나가기)"
+            onClick={toggleFullscreen}
+          >
+            {fullscreen ? "작게" : "크게"}
+          </button>
+          <button
+            type="button"
+            className="btn btn--ghost prac__wideonly"
+            aria-expanded={showKeys}
+            title="단축키 (?)"
+            onClick={() => setShowKeys((v) => !v)}
+          >
+            단축키
           </button>
           {reviewing ? (
             <a className="btn" href="/notes">
@@ -761,9 +1159,35 @@ export function AnalyzeBoard({
             )}
           </section>
 
+          {watchHydrated && watch.length > 0 && (
+            <section>
+              <h2>워치리스트 {watch.length}</h2>
+              <ul className="anz__saves anz__watch">
+                {watch.map((w) => (
+                  <li key={w.ticker}>
+                    <button
+                      type="button"
+                      aria-current={w.ticker === ticker ? "true" : undefined}
+                      onClick={() => {
+                        setTicker(w.ticker);
+                        setPanelOpen(false);
+                      }}
+                    >
+                      <span className="mono">{w.ticker}</span>
+                      <span>{w.name}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <p className="prac__penhint">
+                <kbd>↑</kbd> <kbd>↓</kbd> 로 앞뒤 종목을 넘겨 봅니다.
+              </p>
+            </section>
+          )}
+
           <section>
             <h2>봉 단위</h2>
-            <div className="prac__grid">
+            <div className="prac__grid prac__grid--three">
               {TIMEFRAMES.map((t) => (
                 <button
                   key={t.key}
@@ -773,6 +1197,44 @@ export function AnalyzeBoard({
                   onClick={() => setTfKey(t.key)}
                 >
                   {t.label}
+                </button>
+              ))}
+            </div>
+            {/*
+              장전·장후 거래. 분·시간봉에서만 뜻이 있어 그때만 보입니다.
+              야후는 1분·5분봉의 보관 기간이 짧습니다(7일·60일).
+            */}
+            {intraday && (
+              <label className="anz__check">
+                <input
+                  type="checkbox"
+                  checked={prepost}
+                  onChange={(e) => setPrepost(e.target.checked)}
+                />
+                <span>장전·장후 거래 포함</span>
+              </label>
+            )}
+          </section>
+
+          <section>
+            <h2>가격 눈금</h2>
+            <div className="prac__grid prac__grid--three">
+              {(
+                [
+                  ["normal", "보통", "가격 그대로"],
+                  ["logarithm", "로그", "같은 % 가 같은 높이로 — 긴 기간을 볼 때"],
+                  ["percentage", "%", "화면 왼쪽 끝 봉 대비 몇 % — 비교할 때"],
+                ] as [YScale, string, string][]
+              ).map(([k, label, hint]) => (
+                <button
+                  key={k}
+                  type="button"
+                  className="prac__tool"
+                  aria-pressed={yScale === k}
+                  title={hint}
+                  onClick={() => setYScale(k)}
+                >
+                  {label}
                 </button>
               ))}
             </div>
@@ -786,13 +1248,23 @@ export function AnalyzeBoard({
             </h2>
             <PenPicker color={penColor} size={penSize} onChange={applyPen} />
             {picked ? (
-              <button
-                type="button"
-                className="btn btn--ghost prac__del"
-                onClick={removePicked}
-              >
-                선택한 것 지우기 <kbd>Del</kbd>
-              </button>
+              <div className="prac__row prac__row--wrap">
+                <button type="button" className="btn btn--ghost" onClick={clonePicked} title="Ctrl+D">
+                  복제
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => setLocked(picked.id, true)}
+                  title="실수로 끌어 옮기지 않게 (Alt+L). 푸는 것은 아래 '그린 것' 목록에서"
+                >
+                  잠그기
+                </button>
+                {/* 세 단추가 한 줄이라 단축키 표시는 이름표로 뺍니다 — 붙이면 글자가 세로로 꺾입니다 */}
+                <button type="button" className="btn btn--ghost prac__del" onClick={removePicked} title="Del">
+                  지우기
+                </button>
+              </div>
             ) : (
               <p className="prac__penhint">
                 {tool
@@ -806,6 +1278,33 @@ export function AnalyzeBoard({
             도구 목록 맨 앞에도 둡니다. 서랍을 열어 둔 채로 그리다가 고치고
             싶어질 때, 지금 무엇이 물려 있는지가 여기서 한눈에 보입니다.
           */}
+          <section>
+            <h2>자석</h2>
+            {/*
+              선을 그을 때 고가·저가에 붙이기. "가까우면" 은 봉 가까이 갔을 때만,
+              "늘" 은 어디를 누르든 가장 가까운 고가·저가에 붙습니다.
+            */}
+            <div className="prac__grid prac__grid--three">
+              {(
+                [
+                  ["normal", "끔"],
+                  ["weak_magnet", "가까우면"],
+                  ["strong_magnet", "늘"],
+                ] as [Magnet, string][]
+              ).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  className="prac__tool"
+                  aria-pressed={magnet === k}
+                  onClick={() => setMagnet(k)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </section>
+
           <section>
             <h2>다루기</h2>
             {/*
@@ -901,74 +1400,188 @@ export function AnalyzeBoard({
             </section>
           )}
 
-          {drawings.length > 0 && (
+          {(drawings.length > 0 || histLen.past > 0 || histLen.future > 0) && (
             <section>
               <h2>그린 것 {drawings.length}개</h2>
               <div className="prac__row">
-                <button type="button" className="btn btn--ghost" onClick={undo}>
+                <button type="button" className="btn btn--ghost" onClick={undo} disabled={histLen.past === 0}>
                   되돌리기 <kbd>Ctrl+Z</kbd>
                 </button>
+                <button type="button" className="btn btn--ghost" onClick={redo} disabled={histLen.future === 0}>
+                  다시 <kbd>Ctrl+Y</kbd>
+                </button>
+              </div>
+              {/*
+                하나씩 감추고·잠그고·지우는 목록. 잠긴 것은 차트에서 눌러도 안
+                골라지므로 **푸는 일은 여기서만** 할 수 있습니다.
+              */}
+              {drawings.length > 0 && (
+                <ul className="anz__drawlist">
+                  {drawings.map((d, i) => {
+                    const label = (TOOL_NAME[d.name] ?? d.name) + " " + (i + 1);
+                    return (
+                      <li key={d.id} aria-current={picked?.id === d.id ? "true" : undefined}>
+                        <span className={d.hidden ? "anz__drawname is-off" : "anz__drawname"}>{label}</span>
+                        <button
+                          type="button"
+                          className="anz__ico"
+                          aria-pressed={d.hidden}
+                          aria-label={label + (d.hidden ? " 보이기" : " 감추기")}
+                          onClick={() => setHidden(d.id, !d.hidden)}
+                        >
+                          {d.hidden ? "보임" : "숨김"}
+                        </button>
+                        <button
+                          type="button"
+                          className="anz__ico"
+                          aria-pressed={d.locked}
+                          aria-label={label + (d.locked ? " 잠금 풀기" : " 잠그기")}
+                          onClick={() => setLocked(d.id, !d.locked)}
+                        >
+                          {d.locked ? "풀기" : "잠금"}
+                        </button>
+                        <button
+                          type="button"
+                          className="anz__x"
+                          aria-label={label + " 지우기"}
+                          onClick={() => {
+                            chart.current?.removeDrawing(d.id);
+                            if (picked?.id === d.id) setPicked(null);
+                            autoSave();
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {drawings.length > 0 && (
                 <button
                   type="button"
-                  className="btn btn--ghost"
+                  className="btn btn--ghost anz__wide"
                   onClick={() => {
                     chart.current?.clearDrawings();
+                    setPicked(null);
                     autoSave();
                   }}
                 >
-                  모두 지우기
+                  모두 지우기 (되돌릴 수 있음)
                 </button>
-              </div>
-              {!reviewing && (
-                <a
-                  className="btn btn--ghost anz__tonotes"
-                  href={`/notes?new=1&ticker=${ticker}`}
-                >
+              )}
+              {!reviewing && drawings.length > 0 && (
+                <a className="btn btn--ghost anz__tonotes" href={"/notes?new=1&ticker=" + ticker}>
                   이 분석으로 매매 기록
                 </a>
               )}
             </section>
           )}
 
+          <IndicatorPanel
+            active={activeInd}
+            params={indParams}
+            intraday={intraday}
+            templates={templates}
+            onToggle={toggleInd}
+            onParams={setIndParams}
+            onSaveTemplate={(name) => {
+              const used = Object.fromEntries(
+                savedInd.filter((k) => indParams[k]).map((k) => [k, indParams[k]]),
+              );
+              saveTemplate({ name, indicators: savedInd, params: used });
+            }}
+            onApplyTemplate={(t: IndTemplate) => {
+              for (const [k, v] of Object.entries(t.params)) setIndParams(k, v);
+              rememberInd("analyze", t.indicators.filter((k) => SPEC_BY_KEY.has(k)));
+            }}
+            onRemoveTemplate={removeTemplate}
+          />
+
           <section>
-            <h2>보조지표</h2>
-            <div className="prac__grid">
-              {INDICATORS.map((ind) => {
-                const Icon = INDICATOR_ICONS[ind.key];
-                return (
-                  <button
-                    key={ind.key}
-                    type="button"
-                    className="prac__tool prac__tool--ind"
-                    aria-pressed={activeInd.has(ind.key)}
-                    onClick={() => {
-                      const on = chart.current?.toggleIndicator(
-                        ind.key,
-                        ind.onCandle,
-                      );
-                      setActiveInd((s) => {
-                        const next = new Set(s);
-                        if (on) next.add(ind.key);
-                        else next.delete(ind.key);
-                        // 다음에 들어와도 그대로 켜져 있게 적어 둡니다
-                        rememberInd("analyze", [...next]);
-                        return next;
-                      });
-                    }}
-                  >
-                    {/*
-                      지표는 그림만 두지 않습니다. 이름이 짧고(이동평균·볼린저)
-                      업계에서 굳은 말이라 글자가 더 빨리 읽힙니다. 그림은
-                      목록에서 눈이 걸리게 하는 역할만 합니다.
-                    */}
-                    {Icon && <Icon />}
-                    <span>{ind.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <p className="prac__penhint">켜 둔 것은 다음에 들어와도 그대로입니다.</p>
+            <h2>비교 종목</h2>
+            {/*
+              다른 종목을 % 로 겹칩니다. 화면 왼쪽 끝 봉에서 같이 출발하게
+              맞추므로, 끌어 옮기면 "이 구간에서 누가 더 갔나" 가 바로 보입니다.
+            */}
+            <form
+              className="anz__alertform"
+              onSubmit={(e) => {
+                e.preventDefault();
+                addCompare(cmpInput);
+              }}
+            >
+              <input
+                className="anz__search mono"
+                aria-label="비교할 종목 티커"
+                placeholder="티커 (예: SPY)"
+                value={cmpInput}
+                onChange={(e) => setCmpInput(e.target.value)}
+              />
+              <button type="submit" className="btn btn--ghost" disabled={!cmpInput.trim() || compare.length >= 3}>
+                겹치기
+              </button>
+            </form>
+            {compare.length === 0 && (
+              <div className="prac__row">
+                {["SPY", "QQQ"]
+                  .filter((t) => t !== ticker)
+                  .map((t) => (
+                    <button key={t} type="button" className="btn btn--ghost" onClick={() => addCompare(t)}>
+                      + {t}
+                    </button>
+                  ))}
+              </div>
+            )}
+            {compare.length > 0 && (
+              <ul className="anz__saves">
+                {compare.map((t, i) => (
+                  <li key={t}>
+                    <span className="anz__alertrow">
+                      <i className="anz__swatch" style={{ background: COMPARE_COLORS[i] }} aria-hidden="true" />
+                      <span className="mono">{t}</span>
+                    </span>
+                    <button
+                      type="button"
+                      className="anz__x"
+                      aria-label={t + " 비교 빼기"}
+                      onClick={() => setCompare(compare.filter((x) => x !== t))}
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="prac__penhint">최대 3개. 눈금을 % 로 두면 견주기 쉽습니다.</p>
           </section>
+
+          <section>
+            <h2>화면 나누기</h2>
+            <div className="prac__grid prac__grid--three">
+              {([1, 2, 4] as const).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className="prac__tool"
+                  aria-pressed={layout === n}
+                  onClick={() => setLayout(n)}
+                >
+                  {n === 1 ? "한 칸" : n + "칸"}
+                </button>
+              ))}
+            </div>
+            {layout > 1 && (
+              <p className="prac__penhint">
+                옆 칸은 봉 단위·지표·눈금을 본 차트와 같이 씁니다. 종목만 칸마다
+                따로 — 칸 위 입력란에 티커를 넣고 Enter.
+              </p>
+            )}
+          </section>
+
+          {!reviewing && (
+            <PriceAlerts ticker={ticker} lastPrice={last?.close ?? null} pickedLevel={pickedLevel} />
+          )}
 
           {saved.length > 0 && (
             <section>
@@ -1026,7 +1639,12 @@ export function AnalyzeBoard({
           이미 하나를 두고 있어 여기까지 `main` 으로 두면 둘이 됩니다 —
           화면 낭독기에서 "본문" 이 두 개가 됩니다.
         */}
-        <section className="prac__chart" aria-label="차트">
+        {/*
+          화면 나누기. 본 차트는 늘 첫 칸에 그대로 두고 옆 칸만 붙였다 뗍니다 —
+          본 차트를 새로 만들면 그리던 것과 지표가 날아갑니다.
+        */}
+        <section className={"prac__chart prac__chart--" + layout} aria-label="차트">
+          <div className="prac__main">
           {loading && <div className="prac__overlay">시세를 받는 중입니다…</div>}
           {error && (
             <div className="prac__overlay">
@@ -1048,6 +1666,54 @@ export function AnalyzeBoard({
             /* 끌어 옮긴 자리도 남겨야 합니다 — 없으면 다시 들어왔을 때 되돌아갑니다 */
             onMoveEnd={autoSave}
           />
+          </div>
+          {miniTickers.map((t, i) => (
+            <MiniChart
+              key={i}
+              ticker={t}
+              interval={tfNow.interval}
+              range={tfNow.range}
+              groupBy={tfNow.group}
+              period={tfNow.period}
+              prepost={usePrepost}
+              indicators={indList}
+              yScale={yScale}
+              onTicker={(nt) => {
+                const next = miniTickers.slice();
+                next[i] = nt;
+                setLayoutTickers(next);
+              }}
+              onPromote={() => {
+                // 본 차트와 자리를 맞바꿉니다
+                const next = miniTickers.slice();
+                next[i] = ticker;
+                setLayoutTickers(next);
+                setTicker(t);
+              }}
+            />
+          ))}
+
+          {showKeys && (
+            <div className="anz__keys" role="dialog" aria-label="단축키">
+              <div className="anz__keyshead">
+                <strong>단축키</strong>
+                <button type="button" className="anz__x" aria-label="닫기" onClick={() => setShowKeys(false)}>
+                  ✕
+                </button>
+              </div>
+              <dl>
+                {SHORTCUT_HELP.map(([k, v]) => (
+                  <div key={k}>
+                    <dt>
+                      <kbd>{k}</kbd>
+                    </dt>
+                    <dd>{v}</dd>
+                  </div>
+                ))}
+              </dl>
+              <p className="prac__penhint">한글 입력 상태에서도 됩니다. ? 로 열고 닫습니다.</p>
+            </div>
+          )}
         </section>
       </div>
 

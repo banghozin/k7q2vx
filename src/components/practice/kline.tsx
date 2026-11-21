@@ -37,7 +37,24 @@ export type KlineHandle = {
    * 한 번 더 불리는 순간 도로 꺼집니다 — 차트를 다시 만들 때(종목·봉단위를
    * 바꿀 때) 실제로 그럴 수 있습니다. 몇 번을 불러도 결과가 같게 둡니다.
    */
-  setIndicators: (list: { name: string; onCandle: boolean }[]) => void;
+  setIndicators: (list: { name: string; onCandle: boolean; params?: number[] }[]) => void;
+  /** 가격 눈금 — 보통 / 로그 / % */
+  setYScale: (name: "normal" | "logarithm" | "percentage") => void;
+  /** 그을 때 고가·저가에 붙이기 */
+  setMagnet: (mode: "normal" | "weak_magnet" | "strong_magnet") => void;
+  /** 그린 것 하나를 잠그거나 풉니다. 잠긴 것은 눌러도 안 골라지고 안 움직입니다 */
+  setDrawingLocked: (id: string, locked: boolean) => void;
+  /** 그린 것 하나만 감추거나 다시 보입니다 */
+  setDrawingHidden: (id: string, hidden: boolean) => void;
+  /** 그린 것을 **이 목록 그대로** 맞춥니다 — 되돌리기·다시 하기에 씁니다 */
+  restoreDrawings: (list: SavedDrawing[]) => void;
+  /** 지금 화면을 그림 파일 주소로 (PNG) */
+  picture: () => string;
+  /** 비교 종목을 붙이거나(값) 뗍니다(null) */
+  setCompare: (
+    slot: string,
+    data: { ticker: string; color: string; closes: Record<number, number> } | null,
+  ) => void;
   /**
    * 그리기를 멈추고 **화면 이동·선택 모드**로 돌립니다.
    *
@@ -72,6 +89,8 @@ export type KlineHandle = {
     color: string;
     size: number;
     points: { timestamp?: number; value?: number }[];
+    locked: boolean;
+    hidden: boolean;
   }[];
   /** 하나만 지웁니다 */
   removeDrawing: (id: string) => void;
@@ -102,6 +121,10 @@ export type SavedDrawing = {
   points: { timestamp?: number; value?: number }[];
   color: string;
   size: number;
+  /** 잠금 — 실수로 끌어 옮기지 않게 (없으면 풀림) */
+  locked?: boolean;
+  /** 감춤 — 지우지 않고 잠시 안 보이게 (없으면 보임) */
+  hidden?: boolean;
 };
 
 /**
@@ -260,6 +283,29 @@ export function Kline({
   };
   const drawnRef = useRef<string[]>([]);
   const cleanupRef = useRef<(() => void) | null>(null);
+  /** 자석 — 새로 그리는 것에 붙여 줍니다 */
+  const magnetRef = useRef<"normal" | "weak_magnet" | "strong_magnet">("normal");
+
+  /** 그린 것 하나를 저장할 모양으로 */
+  const toSaved = (o: {
+    name: string;
+    points?: { timestamp?: number; value?: number }[];
+    styles?: unknown;
+    lock?: boolean;
+    visible?: boolean;
+  }): SavedDrawing => {
+    const line = (o.styles as { line?: { color?: string; size?: number } } | undefined)?.line;
+    const s: SavedDrawing = {
+      name: o.name,
+      points: (o.points ?? []).map((p) => ({ timestamp: p.timestamp, value: p.value })),
+      color: line?.color ?? "#c8a15a",
+      size: line?.size ?? 2,
+    };
+    // 기본값(풀림·보임)이면 적지 않습니다 — 저장 크기와 예전 자료와의 호환
+    if (o.lock) s.locked = true;
+    if (o.visible === false) s.hidden = true;
+    return s;
+  };
 
   useEffect(() => {
     let disposed = false;
@@ -273,6 +319,9 @@ export function Kline({
       // 트레이딩뷰 방식으로 새로 만든 도구들을 등록합니다 (overlays.ts 참고)
       const { CUSTOM_OVERLAYS } = await import("./overlays");
       for (const t of CUSTOM_OVERLAYS) api.registerOverlay(t);
+      // 라이브러리에 없는 지표(VWAP·ATR·일목·비교)도 같은 식으로
+      const { CUSTOM_INDICATORS } = await import("./indicators");
+      for (const t of CUSTOM_INDICATORS) api.registerIndicator(t);
 
       const chart = api.init(boxRef.current, {
         styles: {
@@ -404,14 +453,47 @@ export function Kline({
       // 판을 다시 만드는 경우가 있어 한 번 더
       setTimeout(dropTabStop, 300);
 
+      /*
+       * 비교 종목은 **화면 왼쪽 끝 봉에서** 같이 출발해야 합니다. 화면을 끌어
+       * 옮길 때마다 출발점을 바꿔 다시 계산하게 합니다. 끄는 동안 신호가 아주
+       * 잦으므로 한 화면 그리기에 한 번만, 그리고 출발점이 실제로 바뀔 때만.
+       */
+      let rangeFrame = 0;
+      chart.subscribeAction("onVisibleRangeChange", () => {
+        cancelAnimationFrame(rangeFrame);
+        rangeFrame = requestAnimationFrame(() => {
+          const c = chartRef.current;
+          if (!c) return;
+          const from = c.getVisibleRange().from;
+          for (const ind of c.getIndicators()) {
+            if (!ind.name.startsWith("CMP")) continue;
+            const ext = ind.extendData as { from?: number } | undefined;
+            if (ext && ext.from !== from) {
+              c.overrideIndicator({ name: ind.name, extendData: { ...ext, from } });
+            }
+          }
+        });
+      });
+
       const remeasure = () => chartRef.current?.resize();
       requestAnimationFrame(remeasure);
       setTimeout(remeasure, 250);
       window.addEventListener("resize", remeasure);
       window.addEventListener("orientationchange", remeasure);
+      /*
+       * 창 크기는 그대로인데 **차트 칸만** 달라지는 일이 생겼습니다 — 화면을
+       * 2·4칸으로 나누거나 전체 화면으로 키울 때. 창 크기 신호만 듣고 있으면
+       * 차트가 예전 크기로 그려져 잘리거나 빈 자리가 남습니다. 칸 자체를 지켜봅니다.
+       */
+      const ro =
+        typeof ResizeObserver !== "undefined" && boxRef.current
+          ? new ResizeObserver(() => remeasure())
+          : null;
+      if (ro && boxRef.current) ro.observe(boxRef.current);
       cleanupRef.current = () => {
         window.removeEventListener("resize", remeasure);
         window.removeEventListener("orientationchange", remeasure);
+        ro?.disconnect();
       };
 
       onReady?.();
@@ -456,6 +538,7 @@ export function Kline({
       const id = chartRef.current?.createOverlay({
         name,
         styles: penStyles(pen),
+        mode: magnetRef.current,
         ...overlayHooks(),
         /*
          * 하나를 다 그렸을 때 위쪽에 알립니다. 받는 쪽은 저장하고 **이동·선택
@@ -527,18 +610,90 @@ export function Kline({
     setIndicators(list) {
       const chart = chartRef.current;
       if (!chart) return;
-      const want = new Map(list.map((i) => [i.name, i.onCandle]));
-      // 원하지 않는 것은 걷어냅니다
+      const want = new Map(list.map((i) => [i.name, i]));
+      // 원하지 않는 것은 걷어냅니다 — 비교 종목(CMP*)은 따로 다루므로 건드리지 않습니다
       for (const ind of chart.getIndicators()) {
+        if (ind.name.startsWith("CMP")) continue;
         if (!want.has(ind.name)) chart.removeIndicator({ id: ind.id });
       }
       // 없는 것만 붙입니다 — 이미 있는 것을 또 붙이면 판이 하나 더 생깁니다
-      for (const [name, onCandle] of want) {
-        if (chart.getIndicators({ name }).length > 0) continue;
+      for (const [name, { onCandle, params }] of want) {
+        const existing = chart.getIndicators({ name });
+        if (existing.length > 0) {
+          /*
+           * 이미 붙어 있으면 **설정만** 바꿉니다. 떼었다 다시 붙이면 아래 판의
+           * 순서와 높이가 매번 뒤섞입니다.
+           */
+          const cur = existing[0].calcParams as number[];
+          if (params && JSON.stringify(cur) !== JSON.stringify(params)) {
+            chart.overrideIndicator({ name, calcParams: params });
+          }
+          continue;
+        }
+        const create = params ? { name, calcParams: params } : { name };
         chart.createIndicator(
-          onCandle ? { name, paneId: "candle_pane" } : name,
+          onCandle ? { ...create, paneId: "candle_pane" } : create,
           true,
         );
+      }
+    },
+    setYScale(name) {
+      /*
+       * 라이브러리에 로그·% 눈금이 들어 있습니다. 캔들 판의 축만 바꿉니다
+       * (아래 지표 판은 제 눈금 그대로).
+       */
+      chartRef.current?.overrideYAxis({ paneId: "candle_pane", name });
+    },
+    setMagnet(mode) {
+      magnetRef.current = mode;
+      // 이미 그린 것도 끌어 옮길 때 붙도록 함께 바꿉니다
+      const chart = chartRef.current;
+      if (!chart) return;
+      for (const id of drawnRef.current) chart.overrideOverlay({ id, mode });
+    },
+    setDrawingLocked(id, locked) {
+      chartRef.current?.overrideOverlay({ id, lock: locked });
+    },
+    setDrawingHidden(id, hidden) {
+      chartRef.current?.overrideOverlay({ id, visible: !hidden });
+    },
+    restoreDrawings(list) {
+      const chart = chartRef.current;
+      if (!chart) return;
+      cancelPending();
+      for (const id of drawnRef.current) chart.removeOverlay({ id });
+      drawnRef.current = [];
+      for (const s of list) {
+        const id = chart.createOverlay({
+          name: s.name,
+          points: s.points,
+          styles: penStyles({ color: s.color, size: s.size }),
+          lock: s.locked === true,
+          visible: s.hidden !== true,
+          mode: magnetRef.current,
+          ...overlayHooks(),
+        });
+        if (typeof id === "string") drawnRef.current.push(id);
+      }
+    },
+    picture() {
+      // 어두운 배경을 깔아야 그림 파일에서 투명이 아니라 차트처럼 보입니다
+      return chartRef.current?.getConvertPictureUrl(true, "png", "#0d1117") ?? "";
+    },
+    setCompare(slot, data) {
+      const chart = chartRef.current;
+      if (!chart) return;
+      const existing = chart.getIndicators({ name: slot });
+      if (!data) {
+        for (const ind of existing) chart.removeIndicator({ id: ind.id });
+        return;
+      }
+      // 지금 화면 왼쪽 끝에서 출발하게
+      const ext = { ...data, from: chart.getVisibleRange().from };
+      if (existing.length > 0) {
+        chart.overrideIndicator({ name: slot, extendData: ext });
+      } else {
+        chart.createIndicator({ name: slot, paneId: "candle_pane", extendData: ext }, true);
       }
     },
     stopDraw() {
@@ -586,6 +741,8 @@ export function Kline({
             timestamp: p.timestamp,
             value: p.value,
           })),
+          locked: o.lock === true,
+          hidden: o.visible === false,
         };
       });
     },
@@ -612,20 +769,7 @@ export function Kline({
         .getOverlays()
         // 그리다 만 것은 저장하지 않습니다
         .filter((o) => o.id !== pending && (o.points?.length ?? 0) > 0)
-        .map((o) => {
-          const line = (
-            o.styles as { line?: { color?: string; size?: number } } | undefined
-          )?.line;
-          return {
-            name: o.name,
-            points: (o.points ?? []).map((p) => ({
-              timestamp: p.timestamp,
-              value: p.value,
-            })),
-            color: line?.color ?? "#c8a15a",
-            size: line?.size ?? 2,
-          };
-        });
+        .map(toSaved);
     },
     importDrawings(list) {
       const chart = chartRef.current;
@@ -636,6 +780,9 @@ export function Kline({
           name: s.name,
           points: s.points,
           styles: penStyles({ color: s.color, size: s.size }),
+          lock: s.locked === true,
+          visible: s.hidden !== true,
+          mode: magnetRef.current,
           ...overlayHooks(),
         });
         if (typeof id === "string") {
