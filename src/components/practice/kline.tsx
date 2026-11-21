@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useImperativeHandle, useRef } from "react";
-import type { Chart, KLineData, Period } from "klinecharts";
+import type { AxisCreateRangeParams, AxisRange, Chart, KLineData, Period } from "klinecharts";
+
+/** klinecharts 가 가격 눈금 위·아래에 두는 여백 (라이브러리 기본값) */
+const GAP_TOP = 0.2;
+const GAP_BOTTOM = 0.1;
 
 /**
  * KLineChart 을 감싼 조각.
@@ -108,6 +112,19 @@ export type KlineHandle = {
   /** 저장해 둔 것을 도로 그립니다 */
   /** 저장해 둔 것을 도로 그리고, 만들어진 id 를 돌려줍니다 */
   importDrawings: (list: SavedDrawing[]) => string[];
+  /**
+   * 가격·봉 비율 고정 (트레이딩뷰의 Lock price to bar ratio).
+   * 켜면 확대·축소해도 **선의 기울기와 봉 모양이 그대로** 입니다.
+   */
+  setPriceLock: (on: boolean) => void;
+  /** 가격 눈금 뒤집기 — 위가 싼 값, 아래가 비싼 값 */
+  setInvert: (on: boolean) => void;
+  /** 가격 눈금을 다시 봉에 맞춥니다 (눈금을 손으로 끌어 늘였을 때 되돌리기) */
+  autoFitPrice: () => void;
+  /** 화면 좌표(clientX·Y)가 가리키는 가격. 캔들 판 밖이면 null */
+  priceAt: (clientX: number, clientY: number) => number | null;
+  /** 방금 오른쪽 단추로 누른 그림 — 우클릭 메뉴가 묻습니다 */
+  takeRightHit: () => { id: string; name: string } | null;
 };
 
 /**
@@ -246,6 +263,23 @@ export function Kline({
   const moveEndRef = useRef(onMoveEnd);
   moveEndRef.current = onMoveEnd;
 
+  /* ── 가격 눈금 상태 ─────────────────────────────────────────────
+   *
+   * klinecharts 는 눈금 이름(보통·로그·%)을 바꿀 때 축을 **새로 만들면서
+   * 넘겨준 설정만** 남깁니다. 뒤집기·비율 고정을 따로따로 걸면 이름을 바꿀
+   * 때 앞의 것이 사라집니다. 그래서 셋을 여기 들고 있다가 늘 함께 넘깁니다.
+   */
+  const yNameRef = useRef<"normal" | "logarithm" | "percentage">("normal");
+  const invertRef = useRef(false);
+  const lockOnRef = useRef(false);
+  /**
+   * 고정한 비율 = (화면 1px 이 나타내는 눈금 값) × (봉 하나의 폭 px).
+   * 봉 폭이 두 배가 되면 1px 의 값은 절반이 되어야 모양이 그대로입니다.
+   * 로그 눈금이면 값이 로그라서 종목 가격대와 상관없이 뜻이 같습니다.
+   */
+  const lockRatioRef = useRef<number | null>(null);
+  const rightHitRef = useRef<{ id: string; name: string; at: number } | null>(null);
+
   /*
    * 그린 것 하나에 거는 손잡이들.
    *
@@ -271,7 +305,120 @@ export function Kline({
       setTimeout(() => moveEndRef.current?.(), 0);
       return false;
     },
+    /*
+     * 오른쪽 단추. klinecharts 는 그림을 오른쪽 단추로 누르면 **말없이 지웁니다.**
+     * 저장도 되돌리기 기록도 안 거치고 사라져서, 다시 들어오면 되살아나 있었습니다.
+     * 지우지 않게 막고, 무엇을 눌렀는지 적어 둡니다 — 뒤이어 뜨는 우클릭
+     * 메뉴가 "이 그림 지우기·잠그기" 를 보여 줍니다.
+     */
+    onRightClick: (e: { overlay: { id: string | number; name: string }; preventDefault?: () => void }) => {
+      e.preventDefault?.();
+      rightHitRef.current = { id: String(e.overlay.id), name: e.overlay.name, at: Date.now() };
+      return false;
+    },
   });
+
+  /*
+   * 가격 눈금의 범위를 정하는 자리. 라이브러리가 화면을 다시 그릴 때마다
+   * 부릅니다(`createRange`). 고정이 꺼져 있으면 라이브러리 기본과 똑같이 돌려줍니다.
+   *
+   * 로그·% 눈금은 각자 범위 계산이 있는데, 여기를 갈아 끼우면 그것까지
+   * 덮어씁니다. 그래서 세 눈금의 계산을 여기서 똑같이 다시 합니다.
+   */
+  const createRange = ({ chart, defaultRange }: AxisCreateRangeParams): AxisRange => {
+    const name = yNameRef.current;
+    const { from, to, range } = defaultRange;
+    let base: AxisRange = defaultRange;
+    if (name === "logarithm") {
+      const lg = (v: number) => (v < 0 ? -Math.log10(Math.abs(v)) : Math.log10(v));
+      const realFrom = lg(from);
+      const realTo = lg(to);
+      base = { from, to, range, realFrom, realTo, realRange: realTo - realFrom, displayFrom: from, displayTo: to, displayRange: range };
+    } else if (name === "percentage") {
+      const k = chart.getDataList()[chart.getVisibleRange().from];
+      if (k && k.close !== 0) {
+        const realFrom = ((from - k.close) / k.close) * 100;
+        const realTo = ((to - k.close) / k.close) * 100;
+        base = { from, to, range, realFrom, realTo, realRange: realTo - realFrom, displayFrom: realFrom, displayTo: realTo, displayRange: realTo - realFrom };
+      }
+    }
+
+    const ratio = lockRatioRef.current;
+    if (ratio == null || !lockOnRef.current) return base;
+    const h = chart.getSize("candle_pane", "main")?.height ?? 0;
+    const bar = chart.getBarSpace().bar;
+    if (!(h > 0) || !(bar > 0) || !(base.realRange > 0)) return base;
+
+    /*
+     * 라이브러리는 여기서 돌려준 범위에 위 20%·아래 10% 여백을 덧붙입니다.
+     * 비율은 여백까지 넣은 전체로 쟀으니 그만큼 덜어서 돌려줍니다.
+     * 가운데는 지금 화면 봉들의 가운데를 따라갑니다 — 고정하면 위아래로
+     * 봉이 화면 밖으로 나가는 일이 생기는데, 가운데라도 따라가야 덜 잃습니다.
+     */
+    const span = ((ratio / bar) * h) / (1 + GAP_TOP + GAP_BOTTOM);
+    const mid = (base.realFrom + base.realTo) / 2;
+    const realFrom = mid - span / 2;
+    const realTo = mid + span / 2;
+    // 눈금 값 → 봉 가격 — 눈금마다 다릅니다 (로그는 라이브러리 식 그대로)
+    const toValue = (r: number) =>
+      name === "logarithm"
+        ? r < 0
+          ? -(10 ** Math.abs(r))
+          : 10 ** r
+        : name === "percentage"
+          ? base.from + ((r - base.realFrom) / base.realRange) * base.range
+          : r;
+    const f = toValue(realFrom);
+    const t = toValue(realTo);
+    const display = (r: number, v: number) => (name === "logarithm" ? v : r);
+    return {
+      from: f,
+      to: t,
+      range: t - f,
+      realFrom,
+      realTo,
+      realRange: realTo - realFrom,
+      displayFrom: display(realFrom, f),
+      displayTo: display(realTo, t),
+      displayRange: display(realTo, t) - display(realFrom, f),
+    };
+  };
+
+  /** 지금 들고 있는 눈금 설정 셋을 한꺼번에 축에 넘깁니다 */
+  const applyYAxis = () => {
+    chartRef.current?.overrideYAxis({
+      paneId: "candle_pane",
+      name: yNameRef.current,
+      reverse: invertRef.current,
+      createRange,
+    });
+  };
+
+  /**
+   * 비율을 새로 잽니다. 종목·봉 단위·눈금이 바뀌면 예전 비율은 뜻이 없습니다
+   * ($5 짜리와 $500 짜리는 1px 의 값이 100배 다릅니다). 고정을 잠깐 풀고
+   * 라이브러리가 봉에 맞춘 범위를 그린 다음, 그 모양을 그대로 잠급니다.
+   */
+  const relockTimer = useRef(0);
+  const relock = () => {
+    lockRatioRef.current = null;
+    applyYAxis();
+    window.clearTimeout(relockTimer.current);
+    if (!lockOnRef.current) return;
+    // 그리기는 다음 장면에 일어납니다 — 그 뒤에 재야 새 범위가 잡혀 있습니다
+    relockTimer.current = window.setTimeout(() => {
+      const chart = chartRef.current;
+      if (!chart || !lockOnRef.current) return;
+      const axis = chart.getYAxes({ paneId: "candle_pane" })[0];
+      const h = chart.getSize("candle_pane", "main")?.height ?? 0;
+      const bar = chart.getBarSpace().bar;
+      const r = axis?.getRange().realRange ?? 0;
+      if (h > 0 && bar > 0 && r > 0) {
+        lockRatioRef.current = (r / h) * bar;
+        applyYAxis();
+      }
+    }, 60);
+  };
 
   /** 그리다 만 도형을 물립니다 */
   const cancelPending = () => {
@@ -523,6 +670,8 @@ export function Kline({
       chart.setDataLoader({
         getBars: ({ callback }) => callback(bars, false),
       });
+      // 다른 종목의 비율은 뜻이 없습니다 — 새 봉에 맞춰 다시 잽니다
+      if (lockOnRef.current) relock();
     },
     startDraw(name, pen) {
       /*
@@ -642,7 +791,39 @@ export function Kline({
        * 라이브러리에 로그·% 눈금이 들어 있습니다. 캔들 판의 축만 바꿉니다
        * (아래 지표 판은 제 눈금 그대로).
        */
-      chartRef.current?.overrideYAxis({ paneId: "candle_pane", name });
+      yNameRef.current = name;
+      // 뒤집기·비율 고정도 함께 넘깁니다 (위 "가격 눈금 상태" 참고)
+      relock();
+    },
+    setPriceLock(on) {
+      lockOnRef.current = on;
+      relock();
+    },
+    setInvert(on) {
+      invertRef.current = on;
+      applyYAxis();
+    },
+    autoFitPrice() {
+      // 같은 이름으로 다시 넘기면 라이브러리가 "손으로 맞춤" 을 풀고 봉에 다시 맞춥니다
+      relock();
+    },
+    priceAt(clientX, clientY) {
+      const chart = chartRef.current;
+      const dom = chart?.getDom("candle_pane", "main");
+      if (!chart || !dom) return null;
+      const r = dom.getBoundingClientRect();
+      const x = clientX - r.left;
+      const y = clientY - r.top;
+      if (x < 0 || y < 0 || x > r.width || y > r.height) return null;
+      const p = chart.convertFromPixel([{ x, y }], { paneId: "candle_pane" });
+      const v = (Array.isArray(p) ? p[0] : p)?.value;
+      return typeof v === "number" && Number.isFinite(v) ? v : null;
+    },
+    takeRightHit() {
+      const h = rightHitRef.current;
+      rightHitRef.current = null;
+      // 오른쪽 단추를 누른 순간과 메뉴가 뜨는 순간은 거의 붙어 있습니다
+      return h && Date.now() - h.at < 800 ? { id: h.id, name: h.name } : null;
     },
     setMagnet(mode) {
       magnetRef.current = mode;
@@ -757,6 +938,8 @@ export function Kline({
       // 오른쪽 가격축과 앞날 여백을 뺀 폭을 봉 수로 나눕니다
       const usable = box.clientWidth - 70 - chart.getOffsetRightDistance();
       chart.setBarSpace(Math.max(1.5, usable / barCount));
+      // 화면을 처음처럼 맞췄으니 고정 비율도 이 모양으로 다시 잡습니다
+      if (lockOnRef.current) relock();
     },
     width() {
       return boxRef.current?.clientWidth ?? 0;

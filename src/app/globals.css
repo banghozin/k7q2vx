@@ -2824,6 +2824,115 @@ tbody tr:hover {
   min-height: 0;
 }
 
+/* ── 차트 우클릭 메뉴 ── */
+
+.cmenu {
+  position: absolute;
+  z-index: 30;
+  width: 13.5rem;
+  padding: 0.25rem 0;
+  background: var(--ground);
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  box-shadow: var(--shadow-lift);
+  font-size: 0.76rem;
+}
+
+.cmenu__group + .cmenu__group {
+  margin-top: 0.25rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--rule-soft);
+}
+
+.cmenu__head {
+  padding: 0.2rem 0.75rem 0.15rem;
+  font-size: 0.66rem;
+  color: var(--ink-4);
+}
+
+.cmenu__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.5rem;
+  width: 100%;
+  min-height: 30px;
+  padding: 0.3rem 0.75rem;
+  background: none;
+  border: 0;
+  color: var(--ink-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cmenu__item:hover,
+.cmenu__item:focus-visible,
+.cmenu__scale:hover,
+.cmenu__scale:focus-visible {
+  background: var(--ground-2);
+  color: var(--ink);
+  outline: none;
+}
+
+.cmenu__item kbd {
+  margin-left: auto;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.64rem;
+  color: var(--ink-4);
+}
+
+.cmenu__sub {
+  flex-basis: 100%;
+  font-size: 0.66rem;
+  color: var(--ink-4);
+}
+
+/* 켜고 끄는 항목 — 앞에 표시 칸 */
+.cmenu__check {
+  padding-left: 1.85rem;
+  position: relative;
+}
+
+.cmenu__check::before {
+  content: "";
+  position: absolute;
+  left: 0.75rem;
+  top: 0.62rem;
+  width: 0.62rem;
+  height: 0.62rem;
+  border: 1px solid var(--ink-4);
+  border-radius: 2px;
+}
+
+.cmenu__check[aria-checked="true"]::before {
+  background: var(--brass);
+  border-color: var(--brass);
+}
+
+.cmenu__scales {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.25rem;
+  padding: 0.3rem 0.75rem 0.35rem;
+}
+
+.cmenu__scale {
+  min-height: 28px;
+  background: none;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.cmenu__scale[aria-checked="true"] {
+  border-color: var(--brass);
+  color: var(--brass);
+}
+
 /* ── 단축키 안내 ── */
 
 .anz__keys {

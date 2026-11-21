@@ -18,6 +18,8 @@ import { WatchLevels } from "@/components/analyze/watch-levels";
 import { IndicatorPanel } from "@/components/analyze/indicator-panel";
 import { MiniChart } from "@/components/analyze/mini-chart";
 import { PriceAlerts } from "@/components/analyze/price-alerts";
+import { ChartMenu, type ChartMenuState } from "@/components/analyze/chart-menu";
+import { useAlerts } from "@/lib/store/alerts-store";
 import { SPEC_BY_KEY, paramsOf } from "@/components/analyze/indicator-catalog";
 import { COMPARE_SLOTS } from "@/components/practice/indicators";
 import { recentSheets, sheetKey, useAnalysis } from "@/lib/store/analysis-store";
@@ -291,6 +293,14 @@ export function AnalyzeBoard({
   const setYScale = useChartPrefs((s) => s.setYScale);
   const magnet = useChartPrefs((s) => s.magnet);
   const setMagnet = useChartPrefs((s) => s.setMagnet);
+  const priceLock = useChartPrefs((s) => s.priceLock);
+  const setPriceLock = useChartPrefs((s) => s.setPriceLock);
+  const invertScale = useChartPrefs((s) => s.invertScale);
+  const setInvertScale = useChartPrefs((s) => s.setInvertScale);
+  const addAlert = useAlerts((s) => s.add);
+  const [menu, setMenu] = useState<ChartMenuState | null>(null);
+  /** 마지막으로 누른 것이 손가락인가 — 길게 누르기는 십자선이지 메뉴가 아닙니다 */
+  const touchRef = useRef(false);
   const templates = useChartPrefs((s) => s.templates);
   const saveTemplate = useChartPrefs((s) => s.saveTemplate);
   const removeTemplate = useChartPrefs((s) => s.removeTemplate);
@@ -504,6 +514,14 @@ export function AnalyzeBoard({
   useEffect(() => {
     if (chartReady && prefsHydrated) chart.current?.setMagnet(magnet);
   }, [chartReady, prefsHydrated, magnet]);
+
+  useEffect(() => {
+    if (chartReady && prefsHydrated) chart.current?.setPriceLock(priceLock);
+  }, [chartReady, prefsHydrated, priceLock]);
+
+  useEffect(() => {
+    if (chartReady && prefsHydrated) chart.current?.setInvert(invertScale);
+  }, [chartReady, prefsHydrated, invertScale]);
 
   /* ── 비교 종목 ───────────────────────────────────────────────
    *
@@ -869,6 +887,86 @@ export function AnalyzeBoard({
     [watch, ticker],
   );
 
+  /* ── 우클릭 메뉴 ─────────────────────────────────────────────── */
+  const openMenu = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      if (touchRef.current || loading || error) return;
+      // 그리는 중에 오른쪽 단추 = 그리기 그만 (트레이딩뷰와 같습니다)
+      if (toolRef.current) {
+        stopDraw();
+        return;
+      }
+      const box = e.currentTarget.getBoundingClientRect();
+      const hit = chart.current?.takeRightHit() ?? null;
+      const d = hit ? chart.current?.listDrawings().find((x) => x.id === hit.id) : undefined;
+      if (hit) setPicked(hit);
+      setMenu({
+        x: e.clientX - box.left,
+        y: e.clientY - box.top,
+        price: chart.current?.priceAt(e.clientX, e.clientY) ?? null,
+        drawing: hit
+          ? { id: hit.id, label: TOOL_NAME[hit.name] ?? hit.name, locked: d?.locked === true }
+          : null,
+      });
+    },
+    [loading, error, stopDraw],
+  );
+
+  // 메뉴 밖을 누르거나, 휠을 굴리거나, 창 크기가 바뀌면 닫습니다
+  useEffect(() => {
+    if (!menu) return;
+    const close = (e: Event) => {
+      if (e.target instanceof Node && document.querySelector(".cmenu")?.contains(e.target)) return;
+      setMenu(null);
+    };
+    const shut = () => setMenu(null);
+    document.addEventListener("pointerdown", close, true);
+    window.addEventListener("wheel", close, { capture: true, passive: true });
+    window.addEventListener("resize", shut);
+    window.addEventListener("blur", shut);
+    return () => {
+      document.removeEventListener("pointerdown", close, true);
+      window.removeEventListener("wheel", close, true);
+      window.removeEventListener("resize", shut);
+      window.removeEventListener("blur", shut);
+    };
+  }, [menu]);
+
+  const hlineAt = useCallback(
+    (price: number) => {
+      chart.current?.importDrawings([
+        {
+          name: "horizontalStraightLine",
+          points: [{ value: price }],
+          color: penRef.current.color,
+          size: penRef.current.size,
+        },
+      ]);
+      autoSave();
+    },
+    [autoSave],
+  );
+
+  const alertAt = useCallback(
+    (price: number) => {
+      const lastClose = bars.at(-1)?.close;
+      const dir = lastClose != null && price < lastClose ? "below" : "above";
+      addAlert({ ticker, price: Math.round(price * 100) / 100, dir });
+      // 처음 만들 때 한 번만 허락을 묻습니다 (알림 칸과 같은 방식)
+      if (typeof Notification !== "undefined" && Notification.permission === "default") {
+        Notification.requestPermission().catch(() => {});
+      }
+    },
+    [bars, ticker, addAlert],
+  );
+
+  const resetView = useCallback(() => {
+    const w = chart.current?.width() ?? 0;
+    if (w > 0) chart.current?.fitAll(w < 640 ? 90 : 240);
+    chart.current?.autoFitPrice();
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
@@ -901,6 +999,7 @@ export function AnalyzeBoard({
       } else if (e.key === "Escape") {
         stopDraw();
         setShowKeys(false);
+        setMenu(null);
       } else if (!mod && !e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
         if (watch.length === 0) return;
         e.preventDefault();
@@ -1238,6 +1337,27 @@ export function AnalyzeBoard({
                 </button>
               ))}
             </div>
+            {/*
+              트레이딩뷰 우클릭 메뉴의 "가격·봉 비율 고정" · "눈금 뒤집기".
+              차트를 오른쪽 단추로 눌러도 같은 것이 뜹니다. 휴대폰엔 오른쪽
+              단추가 없어 여기에도 둡니다.
+            */}
+            <label className="anz__check" title="확대·축소해도 선의 기울기와 봉 모양이 그대로입니다">
+              <input
+                type="checkbox"
+                checked={priceLock}
+                onChange={(e) => setPriceLock(e.target.checked)}
+              />
+              <span>가격·봉 비율 고정</span>
+            </label>
+            <label className="anz__check">
+              <input
+                type="checkbox"
+                checked={invertScale}
+                onChange={(e) => setInvertScale(e.target.checked)}
+              />
+              <span>눈금 뒤집기</span>
+            </label>
           </section>
 
           <section className="prac__pen">
@@ -1644,7 +1764,13 @@ export function AnalyzeBoard({
           본 차트를 새로 만들면 그리던 것과 지표가 날아갑니다.
         */}
         <section className={"prac__chart prac__chart--" + layout} aria-label="차트">
-          <div className="prac__main">
+          <div
+            className="prac__main"
+            onContextMenu={openMenu}
+            onPointerDown={(e) => {
+              touchRef.current = e.pointerType === "touch";
+            }}
+          >
           {loading && <div className="prac__overlay">시세를 받는 중입니다…</div>}
           {error && (
             <div className="prac__overlay">
@@ -1666,6 +1792,31 @@ export function AnalyzeBoard({
             /* 끌어 옮긴 자리도 남겨야 합니다 — 없으면 다시 들어왔을 때 되돌아갑니다 */
             onMoveEnd={autoSave}
           />
+          {menu && (
+            <ChartMenu
+              menu={menu}
+              lastPrice={last?.close ?? null}
+              yScale={yScale}
+              priceLock={priceLock}
+              invert={invertScale}
+              onClose={() => setMenu(null)}
+              onHLine={hlineAt}
+              onAlert={alertAt}
+              onReset={resetView}
+              onAutoFit={() => chart.current?.autoFitPrice()}
+              onScale={setYScale}
+              onPriceLock={setPriceLock}
+              onInvert={setInvertScale}
+              onClone={clonePicked}
+              onLock={() => menu.drawing && setLocked(menu.drawing.id, true)}
+              onRemove={() => {
+                if (!menu.drawing) return;
+                chart.current?.removeDrawing(menu.drawing.id);
+                setPicked(null);
+                autoSave();
+              }}
+            />
+          )}
           </div>
           {miniTickers.map((t, i) => (
             <MiniChart

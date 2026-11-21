@@ -40,6 +40,10 @@ type State = {
   indParams: Record<string, number[]>;
   yScale: YScale;
   magnet: Magnet;
+  /** 가격·봉 비율 고정 — 확대·축소해도 차트 모양이 그대로 */
+  priceLock: boolean;
+  /** 가격 눈금 뒤집기 */
+  invertScale: boolean;
   templates: IndTemplate[];
   /** 겹쳐 보는 비교 종목 (최대 3) */
   compare: string[];
@@ -61,6 +65,8 @@ type Actions = {
   setIndParams: (key: string, params: number[] | null) => void;
   setYScale: (v: YScale) => void;
   setMagnet: (v: Magnet) => void;
+  setPriceLock: (v: boolean) => void;
+  setInvertScale: (v: boolean) => void;
   saveTemplate: (t: IndTemplate) => void;
   removeTemplate: (name: string) => void;
   setCompare: (list: string[]) => void;
@@ -138,6 +144,8 @@ export const useChartPrefs = create<State & Actions>()(
       indParams: {},
       yScale: "normal",
       magnet: "normal",
+      priceLock: false,
+      invertScale: false,
       templates: [],
       compare: [],
       prepost: false,
@@ -157,6 +165,8 @@ export const useChartPrefs = create<State & Actions>()(
         }),
       setYScale: (yScale) => set({ yScale }),
       setMagnet: (magnet) => set({ magnet }),
+      setPriceLock: (priceLock) => set({ priceLock }),
+      setInvertScale: (invertScale) => set({ invertScale }),
       saveTemplate: (t) =>
         set((s) => ({
           templates: [t, ...s.templates.filter((x) => x.name !== t.name)].slice(0, MAX_TEMPLATES),
@@ -196,6 +206,8 @@ export const useChartPrefs = create<State & Actions>()(
           indParams: s.indParams,
           yScale: s.yScale,
           magnet: s.magnet,
+          priceLock: s.priceLock,
+          invertScale: s.invertScale,
           templates: s.templates,
           compare: s.compare,
           prepost: s.prepost,
@@ -216,6 +228,8 @@ export const useChartPrefs = create<State & Actions>()(
           magnet: (["normal", "weak_magnet", "strong_magnet"] as const).includes(p.magnet as Magnet)
             ? (p.magnet as Magnet)
             : "normal",
+          priceLock: p.priceLock === true,
+          invertScale: p.invertScale === true,
           templates: cleanTemplates(p.templates),
           compare: cleanTickers(p.compare, 3),
           prepost: p.prepost === true,
