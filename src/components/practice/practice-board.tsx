@@ -942,14 +942,16 @@ export function PracticeBoard() {
                       const on = chart.current?.toggleIndicator(i.key, i.onCandle);
                       // 그 판에 그은 것이 맡겨지거나 돌아오므로 목록도 맞춥니다
                       refreshDrawings();
-                      setActiveInd((prev) => {
-                        const next = new Set(prev);
-                        if (on) next.add(i.key);
-                        else next.delete(i.key);
-                        // 다음 판에도 그대로 켜져 있게 적어 둡니다
-                        rememberInd("practice", [...next]);
-                        return next;
-                      });
+                      const next = new Set(activeInd);
+                      if (on) next.add(i.key);
+                      else next.delete(i.key);
+                      setActiveInd(next);
+                      /*
+                       * 다음 판에도 그대로 켜져 있게 적어 둡니다. setActiveInd 의
+                       * 계산 함수 **안에서** 적으면 리액트가 그리는 도중에 다른
+                       * 상태를 바꾸는 것이라 경고가 났습니다 — 밖에서 적습니다.
+                       */
+                      rememberInd("practice", [...next]);
                     }}
                   >
                     {/* 지표는 이름이 짧고 굳은 말이라 글자를 지우지 않습니다 */}

@@ -58,6 +58,28 @@ export const useWatchlist = create<State & Actions>()(
       name: "thememap.watchlist.v1",
       storage: deviceStorage(),
       partialize: (s) => ({ items: s.items }),
+      /*
+       * 저장돼 있던 것을 믿지 않습니다. 이 목록 하나가 상하면 별표를 그리는
+       * 테마 화면·워치리스트·차트 분석이 **통째로 죽고**, 저장된 값이라
+       * 새로고침해도 계속 죽어 있었습니다. 매매노트·알림과 같은 이유로 거릅니다.
+       */
+      merge: (persisted, current) => {
+        const raw = (persisted as Partial<State> | undefined)?.items;
+        const seen = new Set<string>();
+        const items: WatchItem[] = [];
+        for (const x of Array.isArray(raw) ? raw : []) {
+          if (!x || typeof x !== "object" || typeof x.ticker !== "string") continue;
+          const t = x.ticker.trim().toUpperCase();
+          if (!/^[A-Z0-9.\-]{1,10}$/.test(t) || seen.has(t)) continue;
+          seen.add(t);
+          items.push({
+            ticker: t,
+            name: typeof x.name === "string" ? x.name.slice(0, 80) : t,
+            addedAt: typeof x.addedAt === "string" ? x.addedAt : "",
+          });
+        }
+        return { ...current, items };
+      },
       onRehydrateStorage: () => (state) => state?.setHydrated(),
     },
   ),

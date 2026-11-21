@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { placementsOf } from "@/data/themes";
 import {
@@ -481,6 +481,7 @@ function TradeCard({ trade }: { trade: Trade }) {
 
       {closing && (
         <CloseForm
+          entryDate={trade.entryDate}
           onSubmit={(exit) => {
             closeTrade(trade.id, exit);
             setClosing(false);
@@ -493,7 +494,10 @@ function TradeCard({ trade }: { trade: Trade }) {
 
 function CloseForm({
   onSubmit,
+  entryDate,
 }: {
+  /** 진입일 — 청산일이 이보다 앞이면 받지 않습니다 */
+  entryDate: string;
   onSubmit: (v: {
     exitPrice: number;
     exitDate: string;
@@ -506,7 +510,10 @@ function CloseForm({
   const [kept, setKept] = useState<boolean | null>(null);
   const [review, setReview] = useState("");
 
-  const ready = Number(price) > 0 && kept !== null;
+  const id = useId();
+  // 날짜는 YYYY-MM-DD 라 글자 비교가 곧 날짜 비교입니다
+  const dateBad = !date || date < entryDate;
+  const ready = Number(price) > 0 && kept !== null && !dateBad;
 
   return (
     <div
@@ -520,8 +527,9 @@ function CloseForm({
     >
       <div className="grid2">
         <div className="field">
-          <label>청산가 ($)</label>
+          <label htmlFor={`${id}-price`}>청산가 ($)</label>
           <input
+            id={`${id}-price`}
             type="number"
             step="0.01"
             value={price}
@@ -529,12 +537,19 @@ function CloseForm({
           />
         </div>
         <div className="field">
-          <label>청산일</label>
+          <label htmlFor={`${id}-date`}>청산일</label>
           <input
+            id={`${id}-date`}
             type="date"
             value={date}
+            min={entryDate}
             onChange={(e) => setDate(e.target.value)}
           />
+          {dateBad && (
+            <span className="hint" style={{ color: "var(--down)" }}>
+              진입일({entryDate})보다 앞설 수 없습니다.
+            </span>
+          )}
         </div>
       </div>
 

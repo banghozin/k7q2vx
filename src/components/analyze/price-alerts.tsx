@@ -137,7 +137,13 @@ export function PriceAlerts({
         </button>
       </form>
       {pickedLevel != null && (
-        <button type="button" className="btn btn--ghost anz__wide" onClick={() => create(pickedLevel)}>
+        <button
+          type="button"
+          className="btn btn--ghost anz__wide"
+          // "추가" 와 같이 한도에서 잠급니다 — 안 잠그면 눌러도 조용히 무시됩니다
+          disabled={active.length >= MAX_ALERTS}
+          onClick={() => create(pickedLevel)}
+        >
           고른 선({pickedLevel.toFixed(2)})에 알림
         </button>
       )}

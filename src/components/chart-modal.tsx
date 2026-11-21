@@ -65,6 +65,7 @@ export function ChartModal() {
   const [state, setState] = useState<"idle" | "loading" | "error">("idle");
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
 
   // 주소에 ?stock=NVDA 가 붙어 있으면 그 종목 차트가 열린 채로 시작합니다.
   // 링크 하나로 "이 종목 보고 있는 화면"을 그대로 넘길 수 있습니다.
@@ -132,7 +133,34 @@ export function ChartModal() {
     restoreRef.current = document.activeElement as HTMLElement | null;
     closeBtnRef.current?.focus();
 
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    /*
+     * Tab 은 창 안에서만 돕니다. 뒤를 막는 창(aria-modal)이라고 해 두고
+     * 실제로는 Tab 을 몇 번 누르면 초점이 창 뒤의 페이지 메뉴로 빠져나갔습니다.
+     * 키보드로 쓰는 사람은 보이지 않는 곳을 누르게 됩니다.
+     */
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") return close();
+      if (e.key !== "Tab") return;
+      const sheet = sheetRef.current;
+      if (!sheet) return;
+      const items = [
+        ...sheet.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ].filter((el) => el.offsetParent !== null);
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const at = document.activeElement;
+      const inside = at instanceof Node && sheet.contains(at);
+      if (e.shiftKey && (at === first || !inside)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (at === last || !inside)) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     document.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -184,7 +212,7 @@ export function ChartModal() {
       aria-label={`${ticker} 상세`}
       onClick={close}
     >
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet" ref={sheetRef} onClick={(e) => e.stopPropagation()}>
         <div className="sheet__head">
           <div style={{ position: "relative", paddingRight: "2rem" }}>
             <div

@@ -137,6 +137,12 @@ export function TradeForm({
       d.side === "long" ? "손절가는 진입가보다 낮아야" : "손절가는 진입가보다 높아야",
     );
   }
+  // 익절가가 손실 쪽에 있으면 손익비가 음수로 나옵니다 (손절가와 같은 이유로 막습니다)
+  if (math.r != null && math.targetR.some((t) => t.r <= 0)) {
+    missing.push(
+      d.side === "long" ? "익절가는 진입가보다 높아야" : "익절가는 진입가보다 낮아야",
+    );
+  }
   const ready = missing.length === 0;
 
   function save() {

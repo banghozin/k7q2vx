@@ -8,6 +8,7 @@ import {
   createSeriesMarkers,
   type IChartApi,
   type ISeriesApi,
+  type ISeriesMarkersPluginApi,
   type Time,
 } from "lightweight-charts";
 
@@ -52,6 +53,7 @@ export function CandleChart({
   const chartRef = useRef<IChartApi | null>(null);
   const priceRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const volRef = useRef<ISeriesApi<"Histogram"> | null>(null);
+  const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
 
   useEffect(() => {
     if (!boxRef.current) return;
@@ -96,6 +98,7 @@ export function CandleChart({
       chartRef.current = null;
       priceRef.current = null;
       volRef.current = null;
+      markersRef.current = null;
     };
   }, []);
 
@@ -122,10 +125,15 @@ export function CandleChart({
       })),
     );
 
-    if (markers.length) {
+    /*
+     * 표시 층은 하나만 만들고 내용만 바꿉니다. `createSeriesMarkers` 는 부를
+     * 때마다 **새 층을 덧붙이고 앞의 것을 지우지 않습니다** — 기사가 차트보다
+     * 늦게 도착하면 진입·청산 화살표가 두 겹으로 그려졌습니다.
+     */
+    if (markers.length || markersRef.current) {
       try {
-        createSeriesMarkers(
-          price,
+        markersRef.current ??= createSeriesMarkers(price, []);
+        markersRef.current.setMarkers(
           [...markers]
             .sort((a, b) => a.time - b.time)
             .map((m) => {

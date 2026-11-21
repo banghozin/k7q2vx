@@ -78,7 +78,12 @@ export default async function Home() {
       const byTicker =
         Number((b.tickers?.length ?? 0) > 0) - Number((a.tickers?.length ?? 0) > 0);
       if (byTicker !== 0) return byTicker;
-      return a.pubDate < b.pubDate ? 1 : -1;
+      /*
+       * 날짜로 바꿔 견줍니다. 미국 피드는 ISO("2026-11-22T…")인데 SBHNews 는
+       * RSS 원래 모양("Sat, 21 Nov 2026 …")이라, 글자로 견주면 "S" 가 "2"
+       * 보다 뒤라서 **한국어 기사가 날짜와 상관없이 늘 맨 위**에 왔습니다.
+       */
+      return (Date.parse(b.pubDate) || 0) - (Date.parse(a.pubDate) || 0);
     })
     .slice(0, 6);
 

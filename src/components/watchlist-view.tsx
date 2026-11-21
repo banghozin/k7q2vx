@@ -60,7 +60,7 @@ export function WatchlistView() {
               <th style={{ width: "6rem" }}>티커</th>
               <th style={{ width: "11rem" }}>회사</th>
               <th>올라 있는 층</th>
-              <th style={{ width: "4rem" }} />
+              <th />
             </tr>
           </thead>
           <tbody>
@@ -77,7 +77,6 @@ export function WatchlistView() {
                     >
                       {it.ticker}
                     </button>
-                    <span className="synctable__name">{it.name}</span>
                   </td>
                   <td data-label="회사" style={{ color: "var(--ink-3)" }}>
                     {it.name}
@@ -108,7 +107,7 @@ export function WatchlistView() {
                     <button
                       type="button"
                       className="btn btn--ghost"
-                      style={{ padding: ".2rem .5rem", fontSize: ".75rem" }}
+                      style={{ padding: ".2rem .5rem", fontSize: ".75rem", whiteSpace: "nowrap" }}
                       onClick={() => remove(it.ticker)}
                     >
                       워치리스트에서 빼기
