@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { YScale } from "@/lib/store/chart-prefs-store";
 
 /**
@@ -58,15 +58,18 @@ export function ChartMenu({
   priceLock: boolean;
   invert: boolean;
   onClose: () => void;
-  onHLine: (price: number) => void;
-  onAlert: (price: number) => void;
+  /** 없으면 그 항목을 감춥니다 (회고 모드처럼 그릴 수 없는 때) */
+  onHLine?: (price: number) => void;
+  /** 없으면 감춥니다 — 훈련 화면은 종목을 가리고 있어 알림이 뜻이 없습니다 */
+  onAlert?: (price: number) => void;
   onReset: () => void;
   onAutoFit: () => void;
   onScale: (v: YScale) => void;
   onPriceLock: (v: boolean) => void;
   onInvert: (v: boolean) => void;
-  onClone: () => void;
-  onLock: () => void;
+  onClone?: () => void;
+  /** 잠그기·풀기 — 없으면 감춥니다 */
+  onLock?: (locked: boolean) => void;
   onRemove: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -129,17 +132,33 @@ export function ChartMenu({
       aria-label="차트 메뉴"
       style={{ left: pos.left, top: pos.top }}
       onKeyDown={onKeyDown}
-      onContextMenu={(e) => e.preventDefault()}
+      onContextMenu={(e) => {
+        // 메뉴 위에서 또 누르면 차트 칸까지 올라가 메뉴가 그 자리에 새로 뜹니다
+        e.preventDefault();
+        e.stopPropagation();
+      }}
     >
       {menu.drawing && (
         <div className="cmenu__group" role="group" aria-label={menu.drawing.label}>
           <div className="cmenu__head">{menu.drawing.label}</div>
-          <button type="button" role="menuitem" className="cmenu__item" onClick={act(onClone)}>
-            복제<kbd>Ctrl+D</kbd>
-          </button>
-          {!menu.drawing.locked && (
-            <button type="button" role="menuitem" className="cmenu__item" onClick={act(onLock)}>
-              잠그기<kbd>Alt+L</kbd>
+          {onClone && (
+            <button type="button" role="menuitem" className="cmenu__item" onClick={act(onClone)}>
+              복제<kbd>Ctrl+D</kbd>
+            </button>
+          )}
+          {/*
+            잠긴 그림도 오른쪽 단추에는 반응합니다(라이브러리는 끌기만 막습니다).
+            그래서 여기서 바로 풀 수 있게 합니다 — 예전에는 서랍 목록에서만 풀렸습니다.
+          */}
+          {onLock && (
+            <button
+              type="button"
+              role="menuitem"
+              className="cmenu__item"
+              onClick={act(() => onLock(!menu.drawing!.locked))}
+            >
+              {menu.drawing.locked ? "잠금 풀기" : "잠그기"}
+              {!menu.drawing.locked && <kbd>Alt+L</kbd>}
             </button>
           )}
           <button type="button" role="menuitem" className="cmenu__item" onClick={act(onRemove)}>
@@ -151,20 +170,26 @@ export function ChartMenu({
       {p != null && (
         <div className="cmenu__group" role="group" aria-label={`가격 ${fmtPrice(p)}`}>
           <div className="cmenu__head mono">{fmtPrice(p)}</div>
-          <button type="button" role="menuitem" className="cmenu__item" onClick={act(() => onHLine(p))}>
-            이 가격에 수평선
-          </button>
-          <button type="button" role="menuitem" className="cmenu__item" onClick={act(() => onAlert(p))}>
-            이 가격에 알림
-            <span className="cmenu__sub">{dirWord} 울림</span>
-          </button>
+          {onHLine && (
+            <button type="button" role="menuitem" className="cmenu__item" onClick={act(() => onHLine(p))}>
+              이 가격에 수평선
+            </button>
+          )}
+          {onAlert && (
+            <button type="button" role="menuitem" className="cmenu__item" onClick={act(() => onAlert(p))}>
+              이 가격에 알림
+              <span className="cmenu__sub">{dirWord} 울림</span>
+            </button>
+          )}
           <button
             type="button"
             role="menuitem"
             className="cmenu__item"
             onClick={() => {
+              // 클립보드를 못 쓰는 곳(보안 주소가 아닐 때 등)에서는 그냥 닫습니다
+              if (!navigator.clipboard) return onClose();
               navigator.clipboard
-                ?.writeText(fmtPrice(p))
+                .writeText(fmtPrice(p))
                 .then(() => {
                   setCopied(true);
                   setTimeout(onClose, 450);
@@ -224,4 +249,31 @@ export function ChartMenu({
       </div>
     </div>
   );
+}
+
+/**
+ * 메뉴 밖을 누르거나, 휠을 굴리거나, 창 크기가 바뀌거나, 창을 떠나면 닫습니다.
+ * 분석·훈련 두 화면이 똑같이 씁니다.
+ */
+export function useMenuDismiss(open: boolean, close: () => void) {
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  useEffect(() => {
+    if (!open) return;
+    const outside = (e: Event) => {
+      if (e.target instanceof Node && document.querySelector(".cmenu")?.contains(e.target)) return;
+      closeRef.current();
+    };
+    const shut = () => closeRef.current();
+    document.addEventListener("pointerdown", outside, true);
+    window.addEventListener("wheel", outside, { capture: true, passive: true });
+    window.addEventListener("resize", shut);
+    window.addEventListener("blur", shut);
+    return () => {
+      document.removeEventListener("pointerdown", outside, true);
+      window.removeEventListener("wheel", outside, true);
+      window.removeEventListener("resize", shut);
+      window.removeEventListener("blur", shut);
+    };
+  }, [open]);
 }

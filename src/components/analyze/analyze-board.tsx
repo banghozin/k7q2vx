@@ -18,7 +18,7 @@ import { WatchLevels } from "@/components/analyze/watch-levels";
 import { IndicatorPanel } from "@/components/analyze/indicator-panel";
 import { MiniChart } from "@/components/analyze/mini-chart";
 import { PriceAlerts } from "@/components/analyze/price-alerts";
-import { ChartMenu, type ChartMenuState } from "@/components/analyze/chart-menu";
+import { ChartMenu, type ChartMenuState, useMenuDismiss } from "@/components/analyze/chart-menu";
 import { useAlerts } from "@/lib/store/alerts-store";
 import { SPEC_BY_KEY, paramsOf } from "@/components/analyze/indicator-catalog";
 import { COMPARE_SLOTS } from "@/components/practice/indicators";
@@ -890,6 +890,8 @@ export function AnalyzeBoard({
   /* ── 우클릭 메뉴 ─────────────────────────────────────────────── */
   const openMenu = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
+      // 차트 그림판 위에서만 — 기록 창·안내 글 위에서는 브라우저 기본 메뉴 그대로
+      if (!(e.target instanceof Element && e.target.closest(".kline"))) return;
       e.preventDefault();
       if (touchRef.current || loading || error) return;
       // 그리는 중에 오른쪽 단추 = 그리기 그만 (트레이딩뷰와 같습니다)
@@ -913,25 +915,7 @@ export function AnalyzeBoard({
     [loading, error, stopDraw],
   );
 
-  // 메뉴 밖을 누르거나, 휠을 굴리거나, 창 크기가 바뀌면 닫습니다
-  useEffect(() => {
-    if (!menu) return;
-    const close = (e: Event) => {
-      if (e.target instanceof Node && document.querySelector(".cmenu")?.contains(e.target)) return;
-      setMenu(null);
-    };
-    const shut = () => setMenu(null);
-    document.addEventListener("pointerdown", close, true);
-    window.addEventListener("wheel", close, { capture: true, passive: true });
-    window.addEventListener("resize", shut);
-    window.addEventListener("blur", shut);
-    return () => {
-      document.removeEventListener("pointerdown", close, true);
-      window.removeEventListener("wheel", close, true);
-      window.removeEventListener("resize", shut);
-      window.removeEventListener("blur", shut);
-    };
-  }, [menu]);
+  useMenuDismiss(menu !== null, () => setMenu(null));
 
   const hlineAt = useCallback(
     (price: number) => {
@@ -1800,15 +1784,16 @@ export function AnalyzeBoard({
               priceLock={priceLock}
               invert={invertScale}
               onClose={() => setMenu(null)}
-              onHLine={hlineAt}
+              /* 회고 모드에서는 그어도 저장되지 않으므로 그리는 항목을 감춥니다 */
+              onHLine={reviewing ? undefined : hlineAt}
               onAlert={alertAt}
               onReset={resetView}
               onAutoFit={() => chart.current?.autoFitPrice()}
               onScale={setYScale}
               onPriceLock={setPriceLock}
               onInvert={setInvertScale}
-              onClone={clonePicked}
-              onLock={() => menu.drawing && setLocked(menu.drawing.id, true)}
+              onClone={reviewing ? undefined : clonePicked}
+              onLock={reviewing ? undefined : (v) => menu.drawing && setLocked(menu.drawing.id, v)}
               onRemove={() => {
                 if (!menu.drawing) return;
                 chart.current?.removeDrawing(menu.drawing.id);

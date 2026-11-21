@@ -822,8 +822,11 @@ export function Kline({
     takeRightHit() {
       const h = rightHitRef.current;
       rightHitRef.current = null;
-      // 오른쪽 단추를 누른 순간과 메뉴가 뜨는 순간은 거의 붙어 있습니다
-      return h && Date.now() - h.at < 800 ? { id: h.id, name: h.name } : null;
+      /*
+       * 그림 위에서 누른 순간(단추를 누를 때)과 메뉴가 뜨는 순간(윈도에서는
+       * 단추를 뗄 때)은 사람이 꾹 누르고 있으면 벌어집니다. 넉넉히 3초.
+       */
+      return h && Date.now() - h.at < 3000 ? { id: h.id, name: h.name } : null;
     },
     setMagnet(mode) {
       magnetRef.current = mode;

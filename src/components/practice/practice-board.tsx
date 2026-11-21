@@ -5,7 +5,8 @@ import type { KLineData, Period } from "klinecharts";
 import { allTickers, nameOf } from "@/data/themes";
 import { pct, tone } from "@/lib/format";
 import { usePractice } from "@/lib/store/practice-store";
-import { useChartPrefs } from "@/lib/store/chart-prefs-store";
+import { type YScale, useChartPrefs } from "@/lib/store/chart-prefs-store";
+import { ChartMenu, type ChartMenuState, useMenuDismiss } from "@/components/analyze/chart-menu";
 import { Kline, type KlineHandle, type Pen } from "./kline";
 import { HandIcon } from "./hand-icon";
 import { ToolButton } from "./tool-button";
@@ -213,6 +214,33 @@ export function PracticeBoard() {
   const rememberInd = useChartPrefs((s) => s.setIndicators);
   const [activeInd, setActiveInd] = useState<Set<string>>(new Set());
   const [chartReady, setChartReady] = useState(false);
+
+  /*
+   * 우클릭 메뉴 (분석 화면과 같은 것).
+   *
+   * 비율 고정은 **분석 화면과 같은 설정**을 씁니다 — "모양이 안 바뀌게 보는"
+   * 습관은 화면이 바뀌어도 같습니다. 눈금 종류·뒤집기는 이 화면에서만,
+   * 저장하지 않고 씁니다. 분석에서 % 로 비교하다 왔는데 훈련 차트까지 %
+   * 로 뜨면 당황스럽습니다. 뒤집기는 "내가 오를 것만 보나" 를 스스로 떠보는
+   * 훈련 요령이라 이 판에서 잠깐 켜 보는 용도입니다.
+   */
+  const priceLock = useChartPrefs((s) => s.priceLock);
+  const setPriceLock = useChartPrefs((s) => s.setPriceLock);
+  const [yScale, setYScale] = useState<YScale>("normal");
+  const [invert, setInvert] = useState(false);
+  const [menu, setMenu] = useState<ChartMenuState | null>(null);
+  const touchRef = useRef(false);
+  useMenuDismiss(menu !== null, () => setMenu(null));
+
+  useEffect(() => {
+    if (chartReady && prefsHydrated) chart.current?.setPriceLock(priceLock);
+  }, [chartReady, prefsHydrated, priceLock]);
+  useEffect(() => {
+    if (chartReady) chart.current?.setYScale(yScale);
+  }, [chartReady, yScale]);
+  useEffect(() => {
+    if (chartReady) chart.current?.setInvert(invert);
+  }, [chartReady, invert]);
 
   /*
    * 저장해 둔 펜을 되살립니다.
@@ -595,11 +623,52 @@ export function PracticeBoard() {
       }
       if (e.key === "Escape") {
         stopDraw();
+        setMenu(null);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [undo, picked, removePicked, stopDraw]);
+
+  /* ── 우클릭 메뉴 ── */
+  const openMenu = (e: React.MouseEvent<HTMLElement>) => {
+    // 차트 그림판 위에서만 — 기록 창·안내 글 위에서는 브라우저 기본 메뉴 그대로
+    if (!(e.target instanceof Element && e.target.closest(".kline"))) return;
+    e.preventDefault();
+    if (touchRef.current || phase === "loading" || phase === "error") return;
+    // 그리는 중이면 그리기만 그만둡니다
+    if (toolRef.current) {
+      stopDraw();
+      return;
+    }
+    const box = e.currentTarget.getBoundingClientRect();
+    const hit = chart.current?.takeRightHit() ?? null;
+    if (hit) setPicked(hit);
+    setMenu({
+      x: e.clientX - box.left,
+      y: e.clientY - box.top,
+      price: chart.current?.priceAt(e.clientX, e.clientY) ?? null,
+      drawing: hit ? { id: hit.id, label: TOOL_NAME[hit.name] ?? hit.name, locked: false } : null,
+    });
+  };
+
+  const hlineAt = (price: number) => {
+    chart.current?.importDrawings([
+      { name: "horizontalStraightLine", points: [{ value: price }], color: penRef.current.color, size: penRef.current.size },
+    ]);
+    refreshDrawings();
+  };
+
+  /** 이 판을 처음 열었을 때처럼 — 아직 가린 중이면 가린 화면, 열었으면 연 만큼 */
+  const resetView = () => {
+    const w = chart.current?.width() ?? 0;
+    if (w > 0) {
+      const past = w < 640 ? 70 : VISIBLE;
+      chart.current?.fitAll(phase === "reveal" ? past + shown : past);
+      chart.current?.setFutureSpace(futureSpace);
+    }
+    chart.current?.autoFitPrice();
+  };
 
   /** 고른 것의 색·굵기를 바꿉니다. 아무것도 안 골랐으면 다음에 그릴 펜만 바꿉니다 */
   const applyPen = useCallback(
@@ -957,7 +1026,14 @@ export function PracticeBoard() {
           이미 하나를 두고 있어 여기까지 `main` 으로 두면 둘이 됩니다 —
           화면 낭독기에서 "본문" 이 두 개가 됩니다.
         */}
-        <section className="prac__chart" aria-label="차트">
+        <section
+          className="prac__chart"
+          aria-label="차트"
+          onContextMenu={openMenu}
+          onPointerDown={(e) => {
+            touchRef.current = e.pointerType === "touch";
+          }}
+        >
           {phase === "loading" && (
             <div className="prac__overlay">과거 차트를 뽑는 중입니다…</div>
           )}
@@ -981,6 +1057,28 @@ export function PracticeBoard() {
             onMoveEnd={refreshDrawings}
           />
           {logOpen && <PracticeLog onClose={() => setLogOpen(false)} />}
+          {menu && (
+            <ChartMenu
+              menu={menu}
+              lastPrice={null}
+              yScale={yScale}
+              priceLock={priceLock}
+              invert={invert}
+              onClose={() => setMenu(null)}
+              onHLine={hlineAt}
+              onReset={resetView}
+              onAutoFit={() => chart.current?.autoFitPrice()}
+              onScale={setYScale}
+              onPriceLock={setPriceLock}
+              onInvert={setInvert}
+              onRemove={() => {
+                if (!menu.drawing) return;
+                chart.current?.removeDrawing(menu.drawing.id);
+                setPicked(null);
+                refreshDrawings();
+              }}
+            />
+          )}
         </section>
       </div>
 
