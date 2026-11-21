@@ -95,6 +95,8 @@ export type KlineHandle = {
     points: { timestamp?: number; value?: number }[];
     locked: boolean;
     hidden: boolean;
+    /** 아래 지표 판에 그은 것이면 그 지표 이름 */
+    pane?: string;
   }[];
   /** 하나만 지웁니다 */
   removeDrawing: (id: string) => void;
@@ -142,6 +144,14 @@ export type SavedDrawing = {
   locked?: boolean;
   /** 감춤 — 지우지 않고 잠시 안 보이게 (없으면 보임) */
   hidden?: boolean;
+  /**
+   * 아래 지표 판(RSI 등)에 그은 것이면 **그 지표 이름.** 없으면 캔들 판.
+   *
+   * 이게 없던 때는 RSI 판에 그은 선이 다시 그려질 때(새로고침·되돌리기·
+   * 종목 재진입) 캔들 판으로 옮겨 앉았습니다. RSI 50 이 가격 50달러 선이 된
+   * 것입니다. 판 id 는 열 때마다 바뀌므로 지표 이름으로 적습니다.
+   */
+  pane?: string;
 };
 
 /**
@@ -465,9 +475,39 @@ export function Kline({
   /** 자석 — 새로 그리는 것에 붙여 줍니다 */
   const magnetRef = useRef<"normal" | "weak_magnet" | "strong_magnet">("normal");
 
+  /*
+   * ── 아래 지표 판에 그은 것 ────────────────────────────────────
+   *
+   * 판 id 는 지표를 붙일 때마다 새로 생기므로 **지표 이름**으로 적고 되찾습니다.
+   * 그 지표가 지금 꺼져 있으면 그릴 판이 없습니다. 그때 캔들 판에 그리면
+   * RSI 50 이 가격 50달러 선이 되므로, 그리지 않고 **옆에 맡아 둡니다**
+   * (`parkedRef`). 저장할 때는 함께 내보내 잃지 않고, 지표를 다시 켜면 돌아옵니다.
+   */
+  const parkedRef = useRef<SavedDrawing[]>([]);
+
+  /** 판 id → 지표 이름 (캔들 판이면 undefined) */
+  const paneName = (paneId?: string) => {
+    if (!paneId || paneId === "candle_pane") return undefined;
+    const ind = chartRef.current
+      ?.getIndicators({ paneId })
+      .find((i) => !i.name.startsWith("CMP"));
+    // 지표를 못 찾으면 판 id 를 그대로 둡니다 — 캔들 판으로 떨어지는 것보다 맡아 두는 편이 낫습니다
+    return ind?.name ?? paneId;
+  };
+
+  /** 지표 이름 → 지금 그 판의 id (꺼져 있으면 null) */
+  const paneIdFor = (pane?: string): string | null => {
+    if (!pane) return "candle_pane";
+    const ind = chartRef.current
+      ?.getIndicators({ name: pane })
+      .find((i) => i.paneId !== "candle_pane");
+    return ind?.paneId ?? null;
+  };
+
   /** 그린 것 하나를 저장할 모양으로 */
   const toSaved = (o: {
     name: string;
+    paneId?: string;
     points?: { timestamp?: number; value?: number }[];
     styles?: unknown;
     lock?: boolean;
@@ -480,10 +520,58 @@ export function Kline({
       color: line?.color ?? "#c8a15a",
       size: line?.size ?? 2,
     };
-    // 기본값(풀림·보임)이면 적지 않습니다 — 저장 크기와 예전 자료와의 호환
+    // 기본값(풀림·보임·캔들 판)이면 적지 않습니다 — 저장 크기와 예전 자료와의 호환
     if (o.lock) s.locked = true;
     if (o.visible === false) s.hidden = true;
+    const pane = paneName(o.paneId);
+    if (pane) s.pane = pane;
     return s;
+  };
+
+  /** 저장해 둔 것 하나를 제 판에 그립니다. 판이 없으면 맡아 둡니다 */
+  const place = (s: SavedDrawing): string | null => {
+    const chart = chartRef.current;
+    if (!chart) return null;
+    const paneId = paneIdFor(s.pane);
+    if (!paneId) {
+      parkedRef.current.push(s);
+      return null;
+    }
+    const id = chart.createOverlay({
+      name: s.name,
+      paneId,
+      points: s.points,
+      styles: penStyles({ color: s.color, size: s.size }),
+      lock: s.locked === true,
+      visible: s.hidden !== true,
+      mode: magnetRef.current,
+      ...overlayHooks(),
+    });
+    if (typeof id !== "string") return null;
+    drawnRef.current.push(id);
+    return id;
+  };
+
+  /** 지표를 켰으면 맡아 둔 것 중 그 판 것을 다시 그립니다 */
+  const unpark = () => {
+    const list = parkedRef.current;
+    parkedRef.current = [];
+    for (const s of list) place(s);
+  };
+
+  /** 지표 판을 걷어내기 전에 그 판에 그은 것을 맡아 둡니다 — 판과 함께 사라지지 않게 */
+  const parkPane = (paneId: string) => {
+    const chart = chartRef.current;
+    if (!chart || paneId === "candle_pane") return;
+    if (pendingRef.current) {
+      const p = chart.getOverlays({ id: pendingRef.current })[0];
+      if (p?.paneId === paneId) cancelPending();
+    }
+    for (const o of chart.getOverlays({ paneId })) {
+      parkedRef.current.push(toSaved(o));
+      chart.removeOverlay({ id: o.id });
+      drawnRef.current = drawnRef.current.filter((x) => x !== o.id);
+    }
   };
 
   useEffect(() => {
@@ -577,7 +665,6 @@ export function Kline({
 
       if (!chart) return;
       chartRef.current = chart;
-
       // 빠르게 두 번 누르면 두 번째가 무시되던 것 — 위 설명 참고
       if (!relaxClickCoalescing(chart as unknown as object)) {
         console.warn(
@@ -818,6 +905,7 @@ export function Kline({
       if (!chart) return;
       for (const id of drawnRef.current) chart.removeOverlay({ id });
       drawnRef.current = [];
+      parkedRef.current = [];
     },
     undo() {
       const id = drawnRef.current.pop();
@@ -841,7 +929,10 @@ export function Kline({
        */
       const existing = chart.getIndicators({ name });
       if (existing.length > 0) {
-        for (const ind of existing) chart.removeIndicator({ id: ind.id });
+        for (const ind of existing) {
+          parkPane(ind.paneId);
+          chart.removeIndicator({ id: ind.id });
+        }
         return false;
       }
 
@@ -850,6 +941,7 @@ export function Kline({
         onCandle ? { name, paneId: "candle_pane" } : name,
         true,
       );
+      unpark();
       return true;
     },
     setIndicators(list) {
@@ -859,7 +951,10 @@ export function Kline({
       // 원하지 않는 것은 걷어냅니다 — 비교 종목(CMP*)은 따로 다루므로 건드리지 않습니다
       for (const ind of chart.getIndicators()) {
         if (ind.name.startsWith("CMP")) continue;
-        if (!want.has(ind.name)) chart.removeIndicator({ id: ind.id });
+        if (!want.has(ind.name)) {
+          parkPane(ind.paneId);
+          chart.removeIndicator({ id: ind.id });
+        }
       }
       // 없는 것만 붙입니다 — 이미 있는 것을 또 붙이면 판이 하나 더 생깁니다
       for (const [name, { onCandle, params }] of want) {
@@ -881,6 +976,7 @@ export function Kline({
           true,
         );
       }
+      unpark();
     },
     setYScale(name) {
       /*
@@ -943,18 +1039,8 @@ export function Kline({
       cancelPending();
       for (const id of drawnRef.current) chart.removeOverlay({ id });
       drawnRef.current = [];
-      for (const s of list) {
-        const id = chart.createOverlay({
-          name: s.name,
-          points: s.points,
-          styles: penStyles({ color: s.color, size: s.size }),
-          lock: s.locked === true,
-          visible: s.hidden !== true,
-          mode: magnetRef.current,
-          ...overlayHooks(),
-        });
-        if (typeof id === "string") drawnRef.current.push(id);
-      }
+      parkedRef.current = [];
+      for (const s of list) place(s);
     },
     picture() {
       // 어두운 배경을 깔아야 그림 파일에서 투명이 아니라 차트처럼 보입니다
@@ -998,7 +1084,8 @@ export function Kline({
       const chart = chartRef.current;
       if (!chart) return [];
       return chart
-        .getOverlays()
+        // 지표 판(RSI 등)에 그은 선은 가격이 아닙니다
+        .getOverlays({ paneId: "candle_pane" })
         .filter((o) =>
           ["horizontalStraightLine", "horizontalRayLine", "horizontalSegment", "priceLine"].includes(
             o.name,
@@ -1023,6 +1110,7 @@ export function Kline({
           })),
           locked: o.lock === true,
           hidden: o.visible === false,
+          pane: paneName(o.paneId),
         };
       });
     },
@@ -1051,26 +1139,15 @@ export function Kline({
         .getOverlays()
         // 그리다 만 것은 저장하지 않습니다
         .filter((o) => o.id !== pending && (o.points?.length ?? 0) > 0)
-        .map(toSaved);
+        .map(toSaved)
+        // 지표가 꺼져 있어 맡아 둔 것도 함께 — 안 그러면 저장할 때 사라집니다
+        .concat(parkedRef.current);
     },
     importDrawings(list) {
-      const chart = chartRef.current;
       const made: string[] = [];
-      if (!chart) return made;
       for (const s of list) {
-        const id = chart.createOverlay({
-          name: s.name,
-          points: s.points,
-          styles: penStyles({ color: s.color, size: s.size }),
-          lock: s.locked === true,
-          visible: s.hidden !== true,
-          mode: magnetRef.current,
-          ...overlayHooks(),
-        });
-        if (typeof id === "string") {
-          drawnRef.current.push(id);
-          made.push(id);
-        }
+        const id = place(s);
+        if (id) made.push(id);
       }
       return made;
     },

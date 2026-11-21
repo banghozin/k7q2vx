@@ -821,6 +821,8 @@ export function AnalyzeBoard({
         name: src.name,
         color: src.color,
         size: src.size,
+        // RSI 판에 그은 것을 복제하면 RSI 판에 — 빠뜨리면 가격 판으로 갑니다
+        pane: src.pane,
         points: src.points.map((p) => ({
           timestamp: p.timestamp,
           value: typeof p.value === "number" ? p.value * 1.02 : p.value,
