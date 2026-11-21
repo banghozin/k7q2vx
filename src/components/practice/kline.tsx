@@ -764,13 +764,42 @@ export function Kline({
        * 가격을 옮깁니다. 그림을 끌어 옮기는 중이거나, 그리는 중이거나,
        * 손가락 두 개(확대)일 때는 건드리지 않습니다.
        */
-      const drag = { id: -1, y: 0, active: false, frame: 0, pending: 0 };
+      const drag = { id: -1, y: 0, active: false, frame: 0, pending: 0, axisId: -1 };
       const pointers = new Set<number>();
+      /*
+       * 비율 고정 중에 **가격 눈금을 직접 끌어 늘이면** 그 모양을 새 비율로
+       * 삼습니다(트레이딩뷰와 같음). 눈금을 끌면 라이브러리가 자동 맞춤을 끄는데,
+       * 그대로 두면 그 뒤 확대해도 비율이 안 따라가고, 위아래로 끄는 순간
+       * 늘였던 눈금이 옛 비율로 튀어 돌아갔습니다.
+       */
+      const adoptAxisRange = () => {
+        const chart = chartRef.current;
+        const map = lockMapRef.current;
+        if (!chart || !map || !lockOnRef.current) return;
+        const r = chart.getYAxes({ paneId: "candle_pane" })[0]?.getRange();
+        const h = chart.getSize("candle_pane", "main")?.height ?? 0;
+        const bar = chart.getBarSpace().bar;
+        if (!r || !(r.realRange > 0) || !(h > 0) || !(bar > 0)) return;
+        // 이 범위는 위 20%·아래 10% 여백까지 든 전체입니다 — 여백을 뺀 가운데를 찾습니다
+        const s = r.realRange / (1 + GAP_TOP + GAP_BOTTOM);
+        const mid = r.realFrom + GAP_BOTTOM * s + s / 2;
+        const center = map.toValue(mid);
+        if (!Number.isFinite(center)) return;
+        lockRatioRef.current = (r.realRange / h) * bar;
+        lockCenterRef.current = center;
+        applyYAxis();
+      };
       const onDown = (e: PointerEvent) => {
         pointers.add(e.pointerId);
         overlayDragRef.current = false;
         drag.active = false;
+        drag.axisId = -1;
         if (!lockOnRef.current || pointers.size > 1 || e.button !== 0 || pendingRef.current) return;
+        const yAxis = chartRef.current?.getDom("candle_pane", "yAxis");
+        if (yAxis && e.target instanceof Node && yAxis.contains(e.target)) {
+          drag.axisId = e.pointerId;
+          return;
+        }
         const main = chartRef.current?.getDom("candle_pane", "main");
         if (!main || !(e.target instanceof Node) || !main.contains(e.target)) return;
         drag.id = e.pointerId;
@@ -808,6 +837,11 @@ export function Kline({
       const onUp = (e: PointerEvent) => {
         pointers.delete(e.pointerId);
         if (e.pointerId === drag.id) drag.active = false;
+        if (e.pointerId === drag.axisId) {
+          drag.axisId = -1;
+          // 라이브러리가 마지막 움직임을 그린 다음에 잽니다
+          requestAnimationFrame(adoptAxisRange);
+        }
       };
       const box = boxRef.current;
       box?.addEventListener("pointerdown", onDown);

@@ -53,6 +53,8 @@ export function levelsOf(drawings: SavedDrawing[]): number[] {
   const out: number[] = [];
   for (const d of drawings) {
     if (!LEVEL_TOOLS.has(d.name)) continue;
+    // RSI 같은 지표 판에 그은 선은 가격이 아닙니다 (RSI 50 이 50달러 선으로 잡혔습니다)
+    if (d.pane) continue;
     const v = d.points?.[0]?.value;
     if (typeof v !== "number" || !Number.isFinite(v) || v <= 0) continue;
     out.push(v);

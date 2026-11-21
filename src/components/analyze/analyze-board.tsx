@@ -227,7 +227,7 @@ export function AnalyzeBoard({
   const [panelOpen, setPanelOpen] = useState(false);
   const [tool, setTool] = useState<string | null>(null);
   const [drawings, setDrawings] = useState<
-    { id: string; name: string; locked: boolean; hidden: boolean; points: { value?: number }[] }[]
+    { id: string; name: string; locked: boolean; hidden: boolean; points: { value?: number }[]; pane?: string }[]
   >([]);
   const [picked, setPicked] = useState<{ id: string; name: string } | null>(null);
   /*
@@ -1052,7 +1052,10 @@ export function AnalyzeBoard({
   /** 골라 둔 것이 수평선류면 그 가격 — 알림을 걸 수 있습니다 */
   const pickedLevel = useMemo(() => {
     if (!picked || !LEVEL_TOOLS.has(picked.name)) return null;
-    const v = drawings.find((d) => d.id === picked.id)?.points?.[0]?.value;
+    const d = drawings.find((x) => x.id === picked.id);
+    // RSI 같은 지표 판의 선은 가격이 아니라 알림을 걸 수 없습니다
+    if (d?.pane) return null;
+    const v = d?.points?.[0]?.value;
     return typeof v === "number" ? v : null;
   }, [picked, drawings]);
   const miniCount = layout - 1;

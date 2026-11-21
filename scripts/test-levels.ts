@@ -67,6 +67,7 @@ eq(
   [],
   "0·빈 점·NaN 은 버립니다",
 );
+eq(levelsOf([hz(100), { ...hz(50), pane: "RSI" }]), [100], "RSI 등 지표 판에 그은 선은 가격 자리가 아닙니다");
 
 console.log("\n── 닿았는지 ──");
 const bars = [
