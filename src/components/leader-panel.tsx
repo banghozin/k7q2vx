@@ -1,5 +1,6 @@
 import type { ThemeLeaders } from "@/lib/market-data";
 import { placementsOf } from "@/data/themes";
+import { josa } from "@/lib/format";
 
 /**
  * 대장주 판별 근거를 분해해 보여줍니다.
@@ -42,9 +43,10 @@ export function LeaderPanel({
           <span className="caution__label">손바뀜</span>
           <span>
             약 {leaders.handover.agoDays}거래일 전 기준으로는{" "}
-            <strong className="mono">{leaders.handover.from}</strong>가 앞섰는데,
-            지금은 <strong className="mono">{leaders.handover.to}</strong>가
-            앞서 있습니다. 순위가 바뀌었다는 사실만 적은 것이며, 어느 쪽을
+            <strong className="mono">{leaders.handover.from}</strong>
+            {josa(leaders.handover.from, "이/가")} 앞섰는데, 지금은{" "}
+            <strong className="mono">{leaders.handover.to}</strong>
+            {josa(leaders.handover.to, "이/가")} 앞서 있습니다. 순위가 바뀌었다는 사실만 적은 것이며, 어느 쪽을
             사라는 뜻이 아닙니다.
           </span>
         </div>

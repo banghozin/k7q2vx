@@ -339,7 +339,12 @@ export function AnalyzeBoard({
     () => (tradeId ? trades.find((t) => t.id === tradeId) ?? null : null),
     [tradeId, trades],
   );
-  const reviewing = Boolean(review?.chart);
+  /*
+   * 회고는 **그 매매의 종목을 보고 있을 때만**입니다. 회고 중에도 종목 찾기가
+   * 열려 있어서, 다른 종목으로 바꾸면 NVDA 때 얼린 선과 진입선이 AAPL 차트
+   * 위에 그대로 얹혔습니다.
+   */
+  const reviewing = Boolean(review?.chart) && review?.ticker === ticker;
 
   // 못 찾으면 일봉 — 1분봉을 맨 앞에 끼워 넣어서 번호로 고르면 어긋납니다
   const tfNow =
@@ -407,7 +412,7 @@ export function AnalyzeBoard({
     const w = chart.current?.width() ?? 0;
     if (w > 0) chart.current?.fitAll(w < 640 ? 90 : 240);
 
-    if (review?.chart) {
+    if (reviewing && review?.chart) {
       /*
        * 회고 모드 — 진입할 때 얼려 둔 그림을 올립니다. 여기에 진입가와
        * 청산가를 수평선으로 얹으면 "그때 그은 선"과 "실제로 사고판 자리"가
@@ -464,7 +469,7 @@ export function AnalyzeBoard({
     // sheets 는 저장할 때마다 바뀌므로 의존성에서 뺍니다 — 넣으면 저장할 때
     // 마다 차트를 다시 그리게 됩니다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chartReady, feed, tfNow, ticker, tfKey, refreshDrawings, review]);
+  }, [chartReady, feed, tfNow, ticker, tfKey, refreshDrawings, review, reviewing]);
 
   /*
    * 켜 뒀던 보조지표를 도로 올립니다.
