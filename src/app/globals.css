@@ -3075,6 +3075,53 @@ tbody tr:hover {
   color: var(--ink-4);
 }
 
+/*
+ * 차트 화면(분석·훈련)에서는 꼬리말을 감춥니다.
+ *
+ * 차트 판이 화면 높이에 맞춰 꽉 차 있는데 그 아래 꼬리말이 붙어 있어서,
+ * 차트 위에서 휠을 굴리면 확대·축소 대신 **페이지가 내려가며 차트가 쑥
+ * 밀려 올라갔습니다.** 차트 화면은 앱처럼 한 화면에 고정합니다.
+ * 출처·읽는 법 링크는 다른 화면의 꼬리말과 상단 메뉴에 그대로 있습니다.
+ */
+body:has(.prac) .foot {
+  display: none;
+}
+
+/*
+ * 꼬리말을 감춰도 6px(폰 9px)이 남아 휠을 굴리면 그만큼 밀렸습니다. 차트
+ * 판 높이를 "머리줄 6rem 을 뺀 나머지" 로 어림해 뒀는데, 실제 머리줄+테마
+ * 줄은 102px(폰 105px)이었습니다. 숫자를 맞추면 머리줄이 바뀔 때마다 또
+ * 어긋나므로, **화면 높이에 고정한 뒤 남은 자리를 차트가 채우게** 합니다.
+ */
+.shell:has(.prac) {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+}
+
+.shell:has(.prac) > .masthead,
+.shell:has(.prac) > .rail {
+  flex-shrink: 0;
+}
+
+.shell:has(.prac) > main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.shell:has(.prac) .prac {
+  flex: 1;
+  height: auto;
+}
+
+/* 전체 화면일 때는 부모 틀과 떨어져 뜨므로 높이를 직접 줍니다 */
+.shell:has(.prac) .prac.is-full {
+  height: 100vh;
+  height: 100dvh;
+}
+
 .foot__grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
