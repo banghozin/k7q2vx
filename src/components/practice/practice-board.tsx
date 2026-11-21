@@ -940,6 +940,8 @@ export function PracticeBoard() {
                     aria-pressed={activeInd.has(i.key)}
                     onClick={() => {
                       const on = chart.current?.toggleIndicator(i.key, i.onCandle);
+                      // 그 판에 그은 것이 맡겨지거나 돌아오므로 목록도 맞춥니다
+                      refreshDrawings();
                       setActiveInd((prev) => {
                         const next = new Set(prev);
                         if (on) next.add(i.key);

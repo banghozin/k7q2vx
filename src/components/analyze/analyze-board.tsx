@@ -496,7 +496,9 @@ export function AnalyzeBoard({
     if (!chartReady || !prefsHydrated || feed.length === 0) return;
     chart.current?.setIndicators(indList);
     setActiveInd(new Set(savedInd.filter((k) => SPEC_BY_KEY.has(k))));
-  }, [chartReady, prefsHydrated, savedInd, feed, indList]);
+    // 지표를 끄면 그 판에 그은 것이 맡겨지고, 켜면 돌아옵니다 — 목록도 맞춥니다
+    refreshDrawings();
+  }, [chartReady, prefsHydrated, savedInd, feed, indList, refreshDrawings]);
 
   const toggleInd = useCallback(
     (key: string) => {
