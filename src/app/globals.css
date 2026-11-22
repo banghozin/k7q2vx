@@ -1887,6 +1887,44 @@ tbody tr:hover {
   }
 }
 
+/* 달 목차 — 지난 기사는 달마다 한 장 */
+.newsmonths {
+  list-style: none;
+  margin: 0.8rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.5rem;
+}
+
+.newsmonths__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--ink-2);
+  text-decoration: none;
+  font-size: 0.92rem;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.newsmonths__item .mono {
+  font-size: 0.7rem;
+  color: var(--ink-4);
+}
+
+a.newsmonths__item:hover {
+  color: var(--ink);
+  border-color: var(--ink-3);
+}
+
+.newsmonths__item.is-current {
+  border-color: var(--brass-dim);
+  color: var(--accent);
+}
+
 /* ── 차트 분석 화면에서만 쓰는 것 ──────────────────────────────── */
 
 .anz__search {

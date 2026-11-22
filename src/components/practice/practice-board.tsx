@@ -202,6 +202,7 @@ export function PracticeBoard() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [shown, setShown] = useState(0);
   const [rounds, setRounds] = useState(0);
+  const roundSeq = useRef(0);
   const [myLinesOn, setMyLinesOn] = useState(true);
   const [tool, setTool] = useState<string | null>(null);
   const [drawings, setDrawings] = useState<{ id: string; name: string }[]>([]);
@@ -288,6 +289,12 @@ export function PracticeBoard() {
 
   /* ── 한 판 새로 뽑기 ─────────────────────────────────────────── */
   const newRound = useCallback(async () => {
+    /*
+     * 가장 나중에 누른 것만 판으로 올립니다. 빠르게 두 번 누르거나 개발
+     * 모드가 처음에 두 번 부르면, 늦게 도착한 앞 요청이 판을 덮고 문제
+     * 번호도 두 번 올라갔습니다.
+     */
+    const seq = ++roundSeq.current;
     setPhase("loading");
     setTool(null);
     toolRef.current = null;
@@ -308,8 +315,10 @@ export function PracticeBoard() {
         const r = await fetch(
           `/api/chart?ticker=${encodeURIComponent(ticker)}&interval=${tf.interval}&range=${tf.range}`,
         );
+        if (seq !== roundSeq.current) return;
         if (!r.ok) continue;
         const j = (await r.json()) as { candles: Bar[] };
+        if (seq !== roundSeq.current) return;
         const bars = groupBars(j.candles ?? [], tf.group);
         if (bars.length < tf.need) continue;
 
@@ -332,11 +341,15 @@ export function PracticeBoard() {
         });
         setShown(0);
         setPhase("draw");
+        // 문제를 띄운 순간 셉니다 — "실제 보기" 를 누른 판만 세면 건너뛴 판이 빠집니다
+        setRounds((n) => n + 1);
         return;
       } catch {
+        if (seq !== roundSeq.current) return;
         // 다음 종목으로
       }
     }
+    if (seq !== roundSeq.current) return;
     setPhase("error");
   }, [tfKey]);
 
@@ -505,7 +518,6 @@ export function PracticeBoard() {
   function reveal(steps: number) {
     setPhase("reveal");
     setShown((s) => Math.min(maxForward, Math.max(s, steps)));
-    if (phase === "draw") setRounds((r) => r + 1);
   }
 
   // 봉을 더 열면 숫자가 달라지므로 다시 남길 수 있게 합니다 (같은 판은 덮어씀)

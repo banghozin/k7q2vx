@@ -220,6 +220,19 @@ export function AnalyzeBoard({
   const [tfKey, setTfKey] = useState(
     initialTf && TIMEFRAMES.some((t) => t.key === initialTf) ? initialTf : "1d",
   );
+  /*
+   * 화면 안에서 종목·봉 단위를 바꾸면 주소창도 따라 바꿉니다. 안 그러면
+   * AAPL 을 보다가 새로고침하거나 링크를 복사했을 때 처음 들어온 NVDA 로
+   * 돌아갑니다. 뒤로 가기 기록을 쌓지 않도록 replace 로 바꿉니다.
+   */
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("ticker", ticker);
+    url.searchParams.set("tf", tfKey);
+    if (url.href !== window.location.href) {
+      window.history.replaceState(window.history.state, "", url);
+    }
+  }, [ticker, tfKey]);
   const [bars, setBars] = useState<Bar[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

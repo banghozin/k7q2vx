@@ -16,6 +16,7 @@ import type { NewsItem } from "./sbhnews";
 import { SBH } from "./sbhnews";
 import { US_FEED_LABEL } from "./usnews";
 import { kstDay } from "./kst";
+import { decodeEntities } from "./entities";
 
 /** 보관된 기사. 파일 크기를 줄이려고 키를 짧게 뒀습니다. */
 export type ArchivedRaw = {
@@ -90,7 +91,12 @@ const recentFile = recentJson as unknown as RecentFile;
 function expand(r: ArchivedRaw): Archived {
   const s = r.s ?? "sbh";
   return {
-    title: r.t,
+    /*
+     * 이미 쌓인 기사에는 `&quot;` `&#x2014;` 가 남은 제목이 있습니다(해독기가
+     * 몇 개만 알던 때 받은 것). 보관 파일은 되찾을 수 없어 고쳐 쓰지 않고,
+     * 읽을 때 풉니다.
+     */
+    title: decodeEntities(r.t),
     link: r.u,
     date: r.d,
     day: r.d.slice(0, 10),
@@ -127,6 +133,23 @@ export function newsByDay(): { day: string; items: Archived[] }[] {
   return [...map.entries()]
     .map(([day, items]) => ({ day, items }))
     .sort((a, b) => (a.day < b.day ? 1 : -1));
+}
+
+/**
+ * 달별로 묶은 목차 — 보관함을 한 장에 다 그리면 휴대폰이 버거워서
+ * (2026-11 에 3,882건·HTML 6.5MB) 지난 기사는 달마다 한 장씩 나눕니다.
+ * 최신 달이 앞에 옵니다.
+ */
+export function newsMonths(): { month: string; days: number; count: number }[] {
+  const map = new Map<string, { days: number; count: number }>();
+  for (const { day, items } of newsByDay()) {
+    const m = day.slice(0, 7);
+    const cur = map.get(m) ?? { days: 0, count: 0 };
+    map.set(m, { days: cur.days + 1, count: cur.count + items.length });
+  }
+  return [...map.entries()]
+    .map(([month, v]) => ({ month, ...v }))
+    .sort((a, b) => (a.month < b.month ? 1 : -1));
 }
 
 /** 이 종목이 걸린 기사 */

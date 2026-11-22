@@ -21,6 +21,8 @@
  *   - 실패한 피드는 조용히 건너뜁니다. 하나가 죽어도 나머지는 들어와야 합니다.
  */
 
+import { decodeEntities } from "./entities";
+
 export type UsFeed = {
   /** 저장에 쓰는 짧은 식별자 */
   id: string;
@@ -81,22 +83,17 @@ export type UsNewsItem = {
 };
 
 function decode(s: string): string {
-  return s
+  const stripped = s
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&#39;/g, "'")
-    .replace(/&#x2019;/g, "'")
-    .replace(/&#x2018;/g, "'")
-    .replace(/&#x201c;/gi, '"')
-    .replace(/&#x201d;/gi, '"')
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/\s{2,}/g, " ")
-    .trim();
+    .replace(/<[^>]+>/g, " ");
+  return (
+    decodeEntities(stripped)
+      // 둥근 따옴표는 곧은 따옴표로 — 예전부터 그렇게 바꿔 왔고, 영문 판정이 그 모양을 봅니다
+      .replace(/[‘’]/g, "'")
+      .replace(/[“”]/g, '"')
+      .replace(/\s{2,}/g, " ")
+      .trim()
+  );
 }
 
 function pick(block: string, tag: string): string {
