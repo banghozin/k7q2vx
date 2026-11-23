@@ -157,6 +157,43 @@ export const TOOL_ICONS: Record<string, () => React.ReactElement> = {
     </Svg>
   ),
 
+  // 누른 자리에 적는 글자 — 커서 막대와 글자 T
+  textNote: () => (
+    <Svg>
+      <path d="M3 4.5 H13" />
+      <path d="M8 4.5 V15.5" />
+      <path d="M16 3 V17" opacity=".55" />
+    </Svg>
+  ),
+
+  // 가운데와 테두리 한 점
+  circle: () => (
+    <Svg>
+      <circle cx="10" cy="10" r="7" />
+      <Dot x={10} y={10} />
+      <Dot x={17} y={10} />
+    </Svg>
+  ),
+
+  // 두 모서리 안에 맞춘 타원
+  ellipse: () => (
+    <Svg>
+      <ellipse cx="10" cy="10" rx="8" ry="5" />
+      <Dot x={2} y={5} />
+      <Dot x={18} y={15} />
+    </Svg>
+  ),
+
+  // 세 꼭짓점
+  triangle: () => (
+    <Svg>
+      <path d="M10 3 L17.5 16.5 H2.5 Z" />
+      <Dot x={10} y={3} />
+      <Dot x={17.5} y={16.5} />
+      <Dot x={2.5} y={16.5} />
+    </Svg>
+  ),
+
   // 수평선인데 찍은 자리에서 오른쪽으로만
   horizontalRayLine: () => (
     <Svg>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useImperativeHandle, useRef } from "react";
+import { useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { AxisCreateRangeParams, AxisRange, Chart, KLineData, Period } from "klinecharts";
+import { NOTE_FONT } from "./overlays";
 
 /** klinecharts 가 가격 눈금 위·아래에 두는 여백 (라이브러리 기본값) */
 const GAP_TOP = 0.2;
@@ -22,8 +23,16 @@ export type Pen = { color: string; size: number };
 export type KlineHandle = {
   /** 봉 데이터를 통째로 갈아끼웁니다. 봉 단위도 함께 알려 줍니다 */
   setData: (bars: KLineData[], period: Period) => void;
-  /** 그리기 도구를 켭니다. 지금 고른 펜으로 그립니다 */
+  /**
+   * 그리기 도구를 켭니다. 지금 고른 펜으로 그립니다.
+   *
+   * **하나를 다 그려도 도구는 그대로 켜져 있습니다** — 끄는 것은 `stopDraw`.
+   * 켜져 있는 동안에도 이미 그은 것 위를 누르면 새로 그리지 않고 그것을
+   * 고릅니다(끌어 옮기기도 됩니다).
+   */
   startDraw: (name: string, pen: Pen) => void;
+  /** 도구가 켜진 채로 펜을 바꿨을 때 — 다음에 그릴 것부터 새 펜으로 */
+  setPen: (pen: Pen) => void;
   /** 아직 다 못 그린 도형을 물립니다 (도구를 끌 때) */
   cancelDraw: () => void;
   /** 이미 그린 것 하나의 색·굵기를 바꿉니다 */
@@ -152,6 +161,8 @@ export type SavedDrawing = {
    * 것입니다. 판 id 는 열 때마다 바뀌므로 지표 이름으로 적습니다.
    */
   pane?: string;
+  /** 메모에 적은 글자 (메모일 때만) */
+  text?: string;
 };
 
 /**
@@ -273,6 +284,93 @@ export function Kline({
   const moveEndRef = useRef(onMoveEnd);
   moveEndRef.current = onMoveEnd;
 
+  /*
+   * ── 켜 둔 도구 ───────────────────────────────────────────────
+   *
+   * 하나를 다 그려도 도구를 끄지 않습니다("그린 다음 자동으로 이동·선택으로
+   * 되게 하지 말고"). 예전에 한 번 이렇게 했다가 되돌린 적이 있는데, 그때는
+   * 다 그리자마자 **빈 도형을 미리 물려 두는** 방식이었습니다. 라이브러리는
+   * 그리는 중인 도형이 있으면 모든 클릭을 그 도형으로 보내서, 이미 그은 선을
+   * 눌러도 골라지지 않고 그 자리에 새 선이 생겼습니다.
+   *
+   * 지금은 미리 물려 두지 않습니다. **누르는 순간**(`pointerdown`, 라이브러리보다
+   * 먼저) 마우스 아래에 그림이 없을 때만 새 도형을 만듭니다. 그림 위라면
+   * 아무것도 안 해서 라이브러리가 평소처럼 그것을 고르고 끌게 둡니다.
+   * 마우스 아래 그림은 라이브러리가 알려 주는 `onMouseEnter/Leave` 로 압니다.
+   */
+  const armedRef = useRef<{ name: string; pen: Pen } | null>(null);
+  const hoverRef = useRef<string | null>(null);
+  const selectedIdRef = useRef<string | null>(null);
+
+  /*
+   * ── 메모 입력 칸 ─────────────────────────────────────────────
+   * 포토샵 글자 도구처럼 누른 자리에 칸이 뜨고 거기에 바로 칩니다.
+   * 칸은 화면 기준(fixed)으로 띄웁니다 — 차트 상자 안에 끼워 넣으면 라이브러리가
+   * 만든 판들과 뒤섞입니다.
+   */
+  const [note, setNote] = useState<{
+    id: string;
+    x: number;
+    y: number;
+    text: string;
+    color: string;
+    size: number;
+    isNew: boolean;
+    openedAt: number;
+  } | null>(null);
+  const noteRef = useRef(note);
+  noteRef.current = note;
+  const noteInputRef = useRef<HTMLInputElement>(null);
+
+  /** 메모 하나에 입력 칸을 엽니다 — 새로 찍은 것이든 고치려는 것이든 */
+  const openNote = (id: string, isNew: boolean) => {
+    const chart = chartRef.current;
+    const box = boxRef.current;
+    const o = chart?.getOverlays({ id })[0];
+    const pt = o?.points?.[0];
+    if (!chart || !box || !o || !pt) return;
+    const px = chart.convertToPixel(pt, { paneId: o.paneId, absolute: true }) as { x?: number; y?: number };
+    if (typeof px.x !== "number" || typeof px.y !== "number") return;
+    const r = box.getBoundingClientRect();
+    const line = (o.styles as { line?: { color?: string; size?: number } } | undefined)?.line;
+    // 고치는 동안에는 차트 쪽 글자를 숨깁니다 — 칸과 두 겹으로 보이지 않게
+    if (!isNew) chart.overrideOverlay({ id, visible: false });
+    setNote({
+      id,
+      x: r.left + px.x,
+      y: r.top + px.y,
+      text: (o.extendData as { text?: string } | undefined)?.text ?? "",
+      color: line?.color ?? "#c8a15a",
+      size: line?.size ?? 2,
+      isNew,
+      openedAt: Date.now(),
+    });
+  };
+
+  /** 입력 칸을 닫습니다. 비워 두면 메모를 지웁니다(포토샵도 빈 글자 층은 남기지 않습니다) */
+  const closeNote = (text: string | null) => {
+    const n = noteRef.current;
+    const chart = chartRef.current;
+    if (!n) return;
+    noteRef.current = null;
+    setNote(null);
+    if (!chart) return;
+    const drop = () => {
+      chart.removeOverlay({ id: n.id });
+      drawnRef.current = drawnRef.current.filter((x) => x !== n.id);
+    };
+    if (text === null) {
+      // Esc — 새로 찍은 것은 없던 일로, 고치던 것은 원래 글자 그대로
+      if (n.isNew) drop();
+      else chart.overrideOverlay({ id: n.id, visible: true });
+    } else if (!text.trim()) {
+      drop();
+    } else {
+      chart.overrideOverlay({ id: n.id, extendData: { text: text.trim() }, visible: true });
+    }
+    setTimeout(() => drawEndRef.current?.(), 0);
+  };
+
   /* ── 가격 눈금 상태 ─────────────────────────────────────────────
    *
    * klinecharts 는 눈금 이름(보통·로그·%)을 바꿀 때 축을 **새로 만들면서
@@ -315,15 +413,41 @@ export function Kline({
    */
   const overlayHooks = () => ({
     onSelected: (e: { overlay: { id: string | number; name: string } }) => {
+      selectedIdRef.current = String(e.overlay.id);
       selectRef.current?.({ id: String(e.overlay.id), name: e.overlay.name });
       return false;
     },
     onDeselected: () => {
+      selectedIdRef.current = null;
       selectRef.current?.(null);
       return false;
     },
-    onRemoved: () => {
+    onRemoved: (e: { overlay: { id: string | number } }) => {
+      const id = String(e.overlay.id);
+      if (hoverRef.current === id) hoverRef.current = null;
+      if (selectedIdRef.current === id) selectedIdRef.current = null;
       selectRef.current?.(null);
+      return false;
+    },
+    onMouseEnter: (e: { overlay: { id: string | number } }) => {
+      hoverRef.current = String(e.overlay.id);
+      return false;
+    },
+    onMouseLeave: (e: { overlay: { id: string | number } }) => {
+      if (hoverRef.current === String(e.overlay.id)) hoverRef.current = null;
+      return false;
+    },
+    /*
+     * 이미 골라 둔 메모를 한 번 더 누르면 글자를 고칩니다. 더블클릭은
+     * `relaxClickCoalescing` 때문에 오지 않습니다(빠른 클릭을 살리려고 끈 것).
+     * `onClick` 은 `onSelected` 보다 먼저 오므로, 여기서 보는 고른 것은
+     * "누르기 전에 골라져 있던 것" 입니다.
+     */
+    onClick: (e: { overlay: { id: string | number; name: string } }) => {
+      const id = String(e.overlay.id);
+      if (e.overlay.name === "textNote" && selectedIdRef.current === id) {
+        setTimeout(() => openNote(id, false), 0);
+      }
       return false;
     },
     onPressedMoveStart: () => {
@@ -462,6 +586,43 @@ export function Kline({
     }, 60);
   };
 
+  /**
+   * 켜 둔 도구로 새 도형 하나를 물립니다.
+   *
+   * 색·굵기를 만들 때 함께 넘깁니다. klinecharts 는 이걸 `overlay.styles`
+   * 로 들고 있고, 우리 도구들은 그 값을 읽어 그립니다(overlays.ts 참고).
+   */
+  const beginArmed = () => {
+    const armed = armedRef.current;
+    const chart = chartRef.current;
+    if (!armed || !chart || pendingRef.current) return;
+    const id = chart.createOverlay({
+      name: armed.name,
+      styles: penStyles(armed.pen),
+      mode: magnetRef.current,
+      ...overlayHooks(),
+      /*
+       * 하나를 다 그렸을 때. **도구는 끄지 않습니다** — 다음에 누르는 곳에서
+       * 다시 물립니다(위 armedRef 설명). 메모는 여기서 입력 칸을 엽니다.
+       *
+       * 곧바로 부르면 지금 끝나는 도형 처리 중에 끼어들게 되므로 한 박자
+       * 뒤로 미룹니다. `pendingRef` 를 먼저 비워야 뒤이어 오는 `stopDraw`
+       * 가 **방금 그린 것을 지우지 않습니다.**
+       */
+      onDrawEnd: (e: { overlay: { id: string | number; name: string } }) => {
+        pendingRef.current = null;
+        const doneId = String(e.overlay.id);
+        if (e.overlay.name === "textNote") setTimeout(() => openNote(doneId, true), 0);
+        else setTimeout(() => drawEndRef.current?.(), 0);
+        return false;
+      },
+    });
+    if (typeof id === "string") {
+      drawnRef.current.push(id);
+      pendingRef.current = id;
+    }
+  };
+
   /** 그리다 만 도형을 물립니다 */
   const cancelPending = () => {
     const id = pendingRef.current;
@@ -512,6 +673,7 @@ export function Kline({
     styles?: unknown;
     lock?: boolean;
     visible?: boolean;
+    extendData?: unknown;
   }): SavedDrawing => {
     const line = (o.styles as { line?: { color?: string; size?: number } } | undefined)?.line;
     const s: SavedDrawing = {
@@ -525,6 +687,8 @@ export function Kline({
     if (o.visible === false) s.hidden = true;
     const pane = paneName(o.paneId);
     if (pane) s.pane = pane;
+    const text = (o.extendData as { text?: string } | undefined)?.text;
+    if (typeof text === "string" && text) s.text = text;
     return s;
   };
 
@@ -544,6 +708,7 @@ export function Kline({
       styles: penStyles({ color: s.color, size: s.size }),
       lock: s.locked === true,
       visible: s.hidden !== true,
+      extendData: typeof s.text === "string" ? { text: s.text } : undefined,
       mode: magnetRef.current,
       ...overlayHooks(),
     });
@@ -843,7 +1008,23 @@ export function Kline({
           requestAnimationFrame(adoptAxisRange);
         }
       };
+      /*
+       * 켜 둔 도구 — 누르는 순간, 라이브러리보다 먼저(capture) 새 도형을 물립니다.
+       * 마우스가 이미 그은 것 위에 있으면 물리지 않아 그것이 골라집니다.
+       * 손가락은 "위에 있다" 가 없어서 늘 새로 그립니다.
+       */
+      const onArmDown = (e: PointerEvent) => {
+        if (!armedRef.current || pendingRef.current || noteRef.current) return;
+        if (e.button !== 0) return;
+        if (e.pointerType === "mouse" && hoverRef.current) return;
+        beginArmed();
+      };
+      const onLeave = () => {
+        hoverRef.current = null;
+      };
       const box = boxRef.current;
+      box?.addEventListener("pointerdown", onArmDown, true);
+      box?.addEventListener("pointerleave", onLeave);
       box?.addEventListener("pointerdown", onDown);
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
@@ -851,6 +1032,8 @@ export function Kline({
 
       cleanupRef.current = () => {
         box?.removeEventListener("pointerdown", onDown);
+        box?.removeEventListener("pointerdown", onArmDown, true);
+        box?.removeEventListener("pointerleave", onLeave);
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onUp);
         window.removeEventListener("pointercancel", onUp);
@@ -891,44 +1074,14 @@ export function Kline({
       if (lockOnRef.current) relock();
     },
     startDraw(name, pen) {
-      /*
-       * 색·굵기를 만들 때 함께 넘깁니다. klinecharts 는 이걸 `overlay.styles`
-       * 로 들고 있고, 우리 도구들은 그 값을 읽어 그립니다(overlays.ts 참고).
-       * 기본 도구들은 라이브러리가 알아서 씁니다.
-       *
-       * 클릭해서 고르면 알려 주도록 `onSelected` 도 같이 겁니다 — 그래야
-       * 이미 그은 선의 색을 나중에 바꿀 수 있습니다.
-       */
+      armedRef.current = { name, pen };
       // 아직 안 끝난 도형이 있으면 먼저 물립니다 — 반쯤 그린 게 남지 않게
       cancelPending();
-      const id = chartRef.current?.createOverlay({
-        name,
-        styles: penStyles(pen),
-        mode: magnetRef.current,
-        ...overlayHooks(),
-        /*
-         * 하나를 다 그렸을 때 위쪽에 알립니다. 받는 쪽은 저장하고 **이동·선택
-         * 으로 돌아갑니다.**
-         *
-         * 한때는 여기서 같은 도구를 다시 물렸습니다. 그런데 도구가 물려 있는
-         * 동안에는 화면 아무 곳을 눌러도 "새로 그리기" 로 먹혀서, **방금 그은
-         * 선을 고칠 수가 없었습니다.** 그리는 사람이 실제로 하는 일은 한 줄
-         * 긋고 자리를 맞추는 것이라 이쪽이 맞습니다.
-         *
-         * 곧바로 부르면 지금 끝나는 도형 처리 중에 끼어들게 되므로 한 박자
-         * 뒤로 미룹니다. `pendingRef` 를 먼저 비워야 뒤이어 오는 `stopDraw`
-         * 가 **방금 그린 것을 지우지 않습니다.**
-         */
-        onDrawEnd: () => {
-          pendingRef.current = null;
-          setTimeout(() => drawEndRef.current?.(), 0);
-          return false;
-        },
-      });
-      if (typeof id === "string") {
-        drawnRef.current.push(id);
-        pendingRef.current = id;
-      }
+      // 첫 도형은 곧바로 물립니다 — 도구를 고른 직후의 첫 클릭은 늘 새로 그리기
+      beginArmed();
+    },
+    setPen(pen) {
+      if (armedRef.current) armedRef.current = { ...armedRef.current, pen };
     },
     cancelDraw: cancelPending,
     restyle(id, pen) {
@@ -1097,6 +1250,7 @@ export function Kline({
       }
     },
     stopDraw() {
+      armedRef.current = null;
       cancelPending();
     },
     setFutureSpace(px) {
@@ -1171,8 +1325,9 @@ export function Kline({
       const pending = pendingRef.current;
       return chart
         .getOverlays()
-        // 그리다 만 것은 저장하지 않습니다
+        // 그리다 만 것·아직 글자를 안 적은 메모는 저장하지 않습니다
         .filter((o) => o.id !== pending && (o.points?.length ?? 0) > 0)
+        .filter((o) => o.name !== "textNote" || Boolean((o.extendData as { text?: string } | undefined)?.text))
         .map(toSaved)
         // 지표가 꺼져 있어 맡아 둔 것도 함께 — 안 그러면 저장할 때 사라집니다
         .concat(parkedRef.current);
@@ -1187,5 +1342,52 @@ export function Kline({
     },
   }));
 
-  return <div ref={boxRef} className="kline" />;
+  return (
+    <>
+      <div ref={boxRef} className="kline" />
+      {note && (
+        <input
+          ref={noteInputRef}
+          className="kline__note"
+          aria-label="메모 글자"
+          autoFocus
+          defaultValue={note.text}
+          placeholder="글자 입력 후 Enter"
+          size={Math.max(12, note.text.length + 2)}
+          style={{
+            left: note.x,
+            top: note.y,
+            color: note.color,
+            borderColor: note.color,
+            fontSize: NOTE_FONT(note.size),
+          }}
+          onInput={(e) => {
+            // 치는 만큼 칸이 늘어납니다
+            const el = e.currentTarget;
+            el.size = Math.max(12, el.value.length + 2);
+          }}
+          onKeyDown={(e) => {
+            // 화면 단축키(Delete·Ctrl+Z·Esc …)로 새지 않게
+            e.stopPropagation();
+            // 한글을 조합하는 중의 Enter 는 글자 확정이지 입력 끝이 아닙니다
+            if (e.nativeEvent.isComposing) return;
+            if (e.key === "Enter") closeNote(e.currentTarget.value);
+            else if (e.key === "Escape") closeNote(null);
+          }}
+          onBlur={(e) => {
+            /*
+             * 칸이 뜬 직후 라이브러리 클릭 처리 뒤끝에 초점을 잃는 일이 있습니다.
+             * 그때 닫으면 빈 칸이라 메모가 지워지므로 잠깐은 초점을 되돌립니다.
+             */
+            const el = e.currentTarget;
+            if (Date.now() - note.openedAt < 250) {
+              setTimeout(() => el.focus(), 0);
+              return;
+            }
+            closeNote(el.value);
+          }}
+        />
+      )}
+    </>
+  );
 }

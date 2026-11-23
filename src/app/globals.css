@@ -1668,6 +1668,29 @@ tbody tr:hover {
   height: 100%;
 }
 
+/*
+ * 메모 입력 칸 — 누른 자리에 뜹니다. 찍은 점이 글자의 왼쪽 가운데라
+ * 칸도 그 점을 왼쪽 가운데로 맞춥니다. 차트에 내려앉을 글자와 같은 받침색.
+ */
+.kline__note {
+  position: fixed;
+  z-index: 80;
+  transform: translateY(-50%);
+  padding: 3px 5px;
+  background: rgba(13, 17, 23, 0.92);
+  border: 1px dashed;
+  border-radius: 3px;
+  font-family: var(--font-sans), "Apple SD Gothic Neo", sans-serif;
+  font-weight: 500;
+  line-height: 1.2;
+  outline: none;
+}
+
+.kline__note::placeholder {
+  color: var(--ink-4);
+  font-weight: 400;
+}
+
 /* ── 펜 (색·굵기 고르기) ───────────────────────────────────────── */
 
 /* 3열 두 줄. 한 줄에 다 넣으려다 5+1 로 갈라져 빈 칸이 남았습니다 */
@@ -1802,11 +1825,12 @@ tbody tr:hover {
   color: var(--ink-2);
 }
 
+/* 도구 쓰는 법 안내 — 가장 어두운 회색(--ink-4)이라 "너무 잘 안 보인다" 해서 밝혔습니다 */
 .prac__penhint {
   margin: 0.5rem 0 0;
-  font-size: 0.66rem;
+  font-size: 0.74rem;
   line-height: 1.6;
-  color: var(--ink-4);
+  color: var(--ink-2);
 }
 
 .prac__drawn li kbd,

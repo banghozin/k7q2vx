@@ -125,15 +125,25 @@ const DRAW_GROUPS: {
       { key: "priceChannelLine", label: "채널", hint: "세 점으로 평행 채널" },
       { key: "parallelStraightLine", label: "평행선", hint: "세 점으로 평행선" },
       { key: "freeCurve", label: "자유곡선", hint: "누른 채로 끌면 그려집니다" },
-      { key: "simpleAnnotation", label: "메모", hint: "글자를 적습니다" },
+      { key: "textNote", label: "메모", hint: "누른 자리에 바로 적습니다. 고칠 때는 고른 메모를 한 번 더" },
+    ],
+  },
+  {
+    title: "모양",
+    tools: [
+      { key: "circle", label: "원", hint: "가운데 → 테두리 두 점. 매수·매도 자리 표시" },
+      { key: "ellipse", label: "타원", hint: "두 모서리 안에 맞춘 타원" },
+      { key: "triangle", label: "삼각형", hint: "꼭짓점 세 개" },
     ],
   },
 ];
 
 /** 도구 이름 → 목록에 보여줄 한국어 */
-const TOOL_NAME: Record<string, string> = Object.fromEntries(
-  DRAW_GROUPS.flatMap((g) => g.tools.map((t) => [t.key, t.label])),
-);
+const TOOL_NAME: Record<string, string> = {
+  // 예전 메모(라이브러리 기본) — 도구 목록에서는 뺐지만 저장된 것은 남아 있습니다
+  simpleAnnotation: "메모",
+  ...Object.fromEntries(DRAW_GROUPS.flatMap((g) => g.tools.map((t) => [t.key, t.label]))),
+};
 
 // 짝수로 맞춥니다 — 2열 배치에서 홀수면 빈 칸이 남아 어설퍼 보입니다
 const INDICATORS: { key: string; label: string; onCandle: boolean }[] = [
@@ -543,11 +553,15 @@ export function PracticeBoard() {
   /*
    * 도구를 물리고 푸는 곳.
    *
-   * **한 번 그리면 도구가 풀리고 이동·선택으로 돌아옵니다.** 같은 단추를
-   * 다시 누르면 그때도 풀립니다.
+   * **한 번 그려도 도구는 켜진 채입니다.** 같은 단추를 다시 누르거나
+   * «이동»·Esc 로 풉니다.
    */
   const penRef = useRef({ color: penColor, size: penSize });
   penRef.current = { color: penColor, size: penSize };
+  // 도구가 켜진 채로 펜을 바꾸면 다음에 그릴 것부터 새 펜으로
+  useEffect(() => {
+    chart.current?.setPen({ color: penColor, size: penSize });
+  }, [penColor, penSize]);
   const toolRef = useRef<string | null>(null);
 
   /*
@@ -557,8 +571,9 @@ export function PracticeBoard() {
    * 먹힙니다.** 그래서 이미 그어 둔 선을 누르면 골라지는 게 아니라 그 자리에
    * 새 선이 하나 더 생겼습니다. 점을 끌어 옮기는 것도 안 됐고요.
    *
-   * 한때는 하나 그릴 때마다 같은 도구를 다시 물렸는데 그게 원인이었습니다.
-   * 지금은 그리고 나면 여기로 돌아옵니다.
+   * 한때는 하나 그릴 때마다 빈 도형을 미리 다시 물렸는데 그게 원인이었습니다.
+   * 지금은 도구가 켜져 있어도 미리 물리지 않고, 누르는 자리에 그림이 없을
+   * 때만 새로 그립니다(kline.tsx armedRef). 여기는 도구를 아예 끄는 곳입니다.
    */
   const stopDraw = useCallback(() => {
     toolRef.current = null;
@@ -581,17 +596,17 @@ export function PracticeBoard() {
   );
 
   /**
-   * 하나 다 그렸을 때 — **곧바로 이동·선택으로 돌아옵니다.**
+   * 하나 다 그렸을 때 — **도구는 그대로 둡니다.** 저장만 합니다.
    *
-   * 예전에는 같은 도구를 다시 물렸습니다. 여러 개를 잇달아 그을 때는 편했지만
-   * 그리는 사람이 실제로 하는 일은 **한 줄 긋고 → 자리를 맞추고 → 다음 줄**
-   * 이라, 그을 때마다 «이동» 을 눌러야 했습니다. 도구를 다시 무는 쪽이 한 번
-   * 더 누르는 값이 싸므로 이쪽으로 뒤집습니다.
+   * 한동안 그릴 때마다 이동·선택으로 돌려 보냈는데, "그린 다음 자동으로
+   * 이동·선택으로 되게 하지 말고 그대로" 가 사용자 요청입니다(2026-11-23).
+   * 그때 돌려보냈던 까닭(도구가 켜져 있으면 이미 그은 선을 못 고름)은 차트
+   * 쪽에서 풀었습니다 — 켜진 채로도 그은 것 위를 누르면 골라집니다
+   * (kline.tsx 의 armedRef). 끄는 길은 «이동»·Esc·오른쪽 단추·같은 도구 다시 누르기.
    */
   const handleDrawEnd = useCallback(() => {
     refreshDrawings();
-    stopDraw();
-  }, [refreshDrawings, stopDraw]);
+  }, [refreshDrawings]);
 
   const undo = useCallback(() => {
     chart.current?.undo();
@@ -841,7 +856,7 @@ export function PracticeBoard() {
             ) : (
               <p className="prac__penhint">
                 {tool
-                  ? "한 번 그으면 이동·선택으로 돌아옵니다. 그때 자리를 맞추면 됩니다."
+                  ? "도구는 켜진 채로 남습니다. 그어 둔 것 위를 누르면 골라지고, 끝내려면 «이동» 이나 Esc."
                   : "그려 둔 선을 누르면 골라집니다. 점을 끌면 자리를 옮길 수 있습니다."}
               </p>
             )}

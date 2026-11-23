@@ -583,7 +583,145 @@ export const arrow: OverlayTemplate = {
   },
 };
 
+/* ── 메모 ───────────────────────────────────────────────────────
+ *
+ * 포토샵 글자 도구처럼 **누른 자리에 바로 적습니다.** 점 하나를 찍으면
+ * 차트 위에 입력 칸이 뜨고(kline.tsx), 적은 글자가 `extendData.text` 로
+ * 들어옵니다. 찍은 점이 글자의 왼쪽 가운데입니다 — 입력 칸도 같은 자리에
+ * 뜨므로 치던 글자가 그대로 차트에 내려앉는 것처럼 보입니다.
+ *
+ * 예전 메모(`simpleAnnotation`, 라이브러리 기본)는 글자를 넣을 길이 없어
+ * 빈 화살표만 찍혔습니다. 저장된 것은 그대로 그려지게 둡니다.
+ */
+export const NOTE_FONT = (size: number) => Math.round(12 + size * 2);
+
+export const textNote: OverlayTemplate = {
+  name: "textNote",
+  totalStep: 2,
+  needDefaultPointFigure: false,
+  needDefaultXAxisFigure: false,
+  needDefaultYAxisFigure: false,
+  createPointFigures: ({ coordinates, overlay }) => {
+    if (coordinates.length < 1) return [];
+    const text = (overlay.extendData as { text?: string } | undefined)?.text ?? "";
+    // 적는 중(칸이 떠 있는 동안)에는 칸이 글자를 보여 줍니다
+    if (!text) return [];
+    const pen = penOf(overlay, GOLD);
+    const [p] = coordinates;
+    return [
+      {
+        type: "text",
+        attrs: { x: p.x, y: p.y, text, align: "left", baseline: "middle" },
+        styles: { ...LABEL_BOX, color: pen.color, size: NOTE_FONT(pen.size), weight: 500 },
+      },
+    ];
+  },
+};
+
+/* ── 원 ─────────────────────────────────────────────────────────
+ *
+ * 가운데를 찍고 → 테두리 한 곳을 찍습니다. 매수·매도 자리를 동그라미로
+ * 표시하는 용도라 **화면에서 늘 동그랗게** 그립니다(반지름 = 두 점 사이의
+ * 화면 거리). 가격·시간으로 반지름을 재면 확대할 때 찌그러집니다.
+ */
+export const circle: OverlayTemplate = {
+  name: "circle",
+  totalStep: 3,
+  needDefaultPointFigure: true,
+  needDefaultXAxisFigure: false,
+  needDefaultYAxisFigure: false,
+  createPointFigures: ({ coordinates, overlay }) => {
+    if (coordinates.length < 2) return [];
+    const pen = penOf(overlay, GOLD);
+    const [c, e] = coordinates;
+    const r = Math.hypot(e.x - c.x, e.y - c.y);
+    return [
+      {
+        type: "circle",
+        attrs: { x: c.x, y: c.y, r },
+        styles: {
+          style: "stroke_fill",
+          color: tint(pen.color, 0.1),
+          borderColor: pen.color,
+          borderSize: Math.max(1, pen.size),
+        },
+      },
+    ];
+  },
+};
+
+/** 두 모서리 안에 꼭 맞는 타원 — 라이브러리에 타원 모양이 없어 다각형으로 */
+function ellipsePoints(a: { x: number; y: number }, b: { x: number; y: number }) {
+  const cx = (a.x + b.x) / 2;
+  const cy = (a.y + b.y) / 2;
+  const rx = Math.abs(b.x - a.x) / 2;
+  const ry = Math.abs(b.y - a.y) / 2;
+  const n = 72;
+  return Array.from({ length: n }, (_, i) => {
+    const t = (i / n) * Math.PI * 2;
+    return { x: cx + rx * Math.cos(t), y: cy + ry * Math.sin(t) };
+  });
+}
+
+/* ── 타원 ─────────────────────────────────────────────────────── */
+export const ellipse: OverlayTemplate = {
+  name: "ellipse",
+  totalStep: 3,
+  needDefaultPointFigure: true,
+  needDefaultXAxisFigure: false,
+  needDefaultYAxisFigure: false,
+  createPointFigures: ({ coordinates, overlay }) => {
+    if (coordinates.length < 2) return [];
+    const pen = penOf(overlay, GOLD);
+    return [
+      {
+        type: "polygon",
+        attrs: { coordinates: ellipsePoints(coordinates[0], coordinates[1]) },
+        styles: {
+          style: "stroke_fill",
+          color: tint(pen.color, 0.1),
+          borderColor: pen.color,
+          borderSize: Math.max(1, pen.size),
+        },
+      },
+    ];
+  },
+};
+
+/* ── 삼각형 ───────────────────────────────────────────────────── */
+export const triangle: OverlayTemplate = {
+  name: "triangle",
+  totalStep: 4,
+  needDefaultPointFigure: true,
+  needDefaultXAxisFigure: false,
+  needDefaultYAxisFigure: false,
+  createPointFigures: ({ coordinates, overlay }) => {
+    if (coordinates.length < 2) return [];
+    const pen = penOf(overlay, GOLD);
+    // 두 점까지는 선으로 — 세 번째 점을 찍을 때까지 모양을 미리 봅니다
+    if (coordinates.length === 2) {
+      return [{ type: "line", attrs: { coordinates }, styles: { color: pen.color, size: pen.size } }];
+    }
+    return [
+      {
+        type: "polygon",
+        attrs: { coordinates },
+        styles: {
+          style: "stroke_fill",
+          color: tint(pen.color, 0.1),
+          borderColor: pen.color,
+          borderSize: Math.max(1, pen.size),
+        },
+      },
+    ];
+  },
+};
+
 export const CUSTOM_OVERLAYS: OverlayTemplate[] = [
+  textNote,
+  circle,
+  ellipse,
+  triangle,
   fibRetracement,
   elliottImpulse,
   elliottCorrection,
